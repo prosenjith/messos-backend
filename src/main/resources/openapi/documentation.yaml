@@ -549,3 +549,244 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/expenses:
+    post:
+      tags: [Expenses]
+      summary: Add a shared mess expense (MANAGER only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, date]
+              properties:
+                amount:
+                  type: number
+                  example: 1500.00
+                date:
+                  type: string
+                  format: date
+                  example: "2026-07-04"
+                note:
+                  type: string
+                  example: "Rice and vegetables"
+                receiptPhotoUrl:
+                  type: string
+                  example: "https://..."
+      responses:
+        "201":
+          description: Expense recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id: {type: string, format: uuid}
+                      amount: {type: number}
+                      date: {type: string, format: date}
+                      note: {type: string, nullable: true}
+                      receiptPhotoUrl: {type: string, nullable: true}
+                      loggedBy: {type: string, format: uuid}
+                      loggedByName: {type: string}
+                      createdAt: {type: string, format: date-time}
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "403":
+          description: Caller is not the manager
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+    get:
+      tags: [Expenses]
+      summary: List all expenses for the current open cycle
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Expense list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: {type: boolean}
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: string, format: uuid}
+                        amount: {type: number}
+                        date: {type: string, format: date}
+                        note: {type: string, nullable: true}
+                        receiptPhotoUrl: {type: string, nullable: true}
+                        loggedBy: {type: string, format: uuid}
+                        loggedByName: {type: string}
+                        createdAt: {type: string, format: date-time}
+
+  /api/v1/expenses/{id}:
+    delete:
+      tags: [Expenses]
+      summary: Delete an expense (MANAGER only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Expense deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "403":
+          description: Caller is not the manager
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "404":
+          description: Expense not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/deposits:
+    post:
+      tags: [Deposits]
+      summary: Record a cash deposit from a member (MANAGER only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, amount, date]
+              properties:
+                memberId:
+                  type: string
+                  format: uuid
+                  description: User UUID of the member making the deposit
+                amount:
+                  type: number
+                  example: 500.00
+                date:
+                  type: string
+                  format: date
+                  example: "2026-07-04"
+      responses:
+        "201":
+          description: Deposit recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: {type: boolean}
+                  data:
+                    type: object
+                    properties:
+                      id: {type: string, format: uuid}
+                      memberId: {type: string, format: uuid}
+                      memberName: {type: string}
+                      amount: {type: number}
+                      date: {type: string, format: date}
+                      loggedBy: {type: string, format: uuid}
+                      loggedByName: {type: string}
+                      createdAt: {type: string, format: date-time}
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "403":
+          description: Caller is not the manager
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+    get:
+      tags: [Deposits]
+      summary: List all deposits for the current open cycle
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Deposit list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: {type: boolean}
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: string, format: uuid}
+                        memberId: {type: string, format: uuid}
+                        memberName: {type: string}
+                        amount: {type: number}
+                        date: {type: string, format: date}
+                        loggedBy: {type: string, format: uuid}
+                        loggedByName: {type: string}
+                        createdAt: {type: string, format: date-time}
+
+  /api/v1/deposits/{id}:
+    delete:
+      tags: [Deposits]
+      summary: Delete a deposit (MANAGER only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deposit deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "403":
+          description: Caller is not the manager
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "404":
+          description: Deposit not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"

@@ -40,7 +40,7 @@ There is no lint step configured. There is no way to run a single test class in 
 2. ✅ Auth (signup/login/JWT)
 3. ✅ Mess + MessMember
 4. ✅ Meals
-5. Expenses + Deposits
+5. ✅ Expenses + Deposits
 6. DuesCalculator pure function + unit tests
 7. GET /dues endpoint
 8. Monthly Cycle close
