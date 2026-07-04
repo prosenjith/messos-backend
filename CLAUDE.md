@@ -31,7 +31,7 @@ There is no lint step configured. There is no way to run a single test class in 
 - Every REST response uses `ApiSuccess<T>` or `ApiFailure` from `models/ApiResponse.kt` — never respond with a raw object.
 - All config is read once at startup via `config/AppConfig.kt` which wraps `application.yaml`. Add new config keys there first, not inline.
 - DB schema lives in two places that must stay in sync: Exposed table objects in `db/tables/` (Kotlin) and Flyway SQL files in `src/main/resources/db/migration/` (SQL). When you add a column to an Exposed table, also write a new `V{N}__*.sql` migration.
-- Flyway migrations run automatically on startup. Migration files are numbered sequentially (`V1` → users, `V2` → messes, `V3` → mess_members, `V4` → monthly_cycles, `V5` → meals, `V6` → expenses, `V7` → deposits, `V8` → notices). FK order matters — parent tables before children.
+- Flyway migrations run automatically on startup. Migration files are numbered sequentially (`V1` → users, `V2` → messes, `V3` → mess_members, `V4` → monthly_cycles, `V5` → meals, `V6` → expenses, `V7` → deposits, `V8` → notices, `V9` → cycle_summaries). FK order matters — parent tables before children.
 - `DuesCalculator` is a **pure function** with no DB or HTTP dependencies — inputs: meals + expenses + deposits; output: per-member balances. Lives in `util/DuesCalculator.kt`. 10 unit tests in `DuesCalculatorTest.kt` all pass.
 - Ktor catalog quirk: the version catalog (`io.ktor:ktor-version-catalog:3.5.0`) uses camelCase for multi-word entries — `server-contentNegotiation`, `server-statusPages`, `server-callLogging`, `server-requestValidation`. WebSockets package is `io.ktor.server.websocket` (singular); Swagger is `io.ktor.server.plugins.swagger`.
 
@@ -70,4 +70,11 @@ There is no lint step configured. There is no way to run a single test class in 
 
 **Standard error codes** (defined in spec, implement in StatusPages + routes): `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` 400, `INVALID_JOIN_CODE` 400, `DUPLICATE_ENTRY` 409, `CYCLE_ALREADY_CLOSED` 400, `INTERNAL_ERROR` 500.
 
-**Cycle summaries:** A `cycle_summaries` table (V9 migration) is needed at step 8 to persist per-member balances at close-time — the spec's schema omits it but `GET /cycle/history` requires it.
+**Cycle summaries (step 8):** `cycle_summaries` table (V9) persists per-member balances at cycle-close time. `POST /cycle/close` atomically: runs DuesCalculator, inserts rows into `cycle_summaries` (stores `member_name` for historical immutability), updates `monthly_cycles` (status=CLOSED, endDate=today, mealRateSnapshot, closedAt), and inserts a new OPEN cycle starting the next day. `GET /cycle/history` reads closed cycles + their summaries ordered newest-first.
+
+**WebSocket patterns (step 10):**
+- Ktor's `authenticate {}` block does not intercept WebSocket upgrades. Auth is handled manually in `routes/WebSocketRoute.kt` by reading `?token=<jwt>` from the query string and verifying with `com.auth0.jwt.JWT.require(...)`.
+- `util/WebSocketManager.kt` is a singleton `object` with `ConcurrentHashMap<UUID, CopyOnWriteArraySet<DefaultWebSocketServerSession>>` keyed by messId. Call `connect`/`disconnect` in the WebSocket handler and `broadcastToMess` from route handlers.
+- `broadcastToMess` is a suspend function; each per-session send is wrapped in `runCatching` so a dead session never fails the broadcast.
+- All 9 mutating routes broadcast after `call.respond(...)`: `MEAL_UPDATED`, `MEAL_DELETED`, `EXPENSE_ADDED`, `EXPENSE_DELETED`, `DEPOSIT_ADDED`, `DEPOSIT_DELETED`, `CYCLE_CLOSED`, `NOTICE_POSTED`, `NOTICE_DELETED`. Event payload is `WsEvent(type, data: Map<String,String>)` carrying the relevant ID — clients re-fetch data on receipt.
+- WebSocket endpoint: `GET /api/v1/ws?token=<jwt>` (requires messId claim in JWT — must join a mess first).
