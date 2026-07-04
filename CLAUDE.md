@@ -37,7 +37,7 @@ There is no lint step configured. There is no way to run a single test class in 
 
 **Build sequence (implemented step by step):**
 1. ✅ Skeleton + DB + Swagger
-2. Auth (signup/login/JWT)
+2. ✅ Auth (signup/login/JWT)
 3. Mess + MessMember
 4. Meals
 5. Expenses + Deposits
@@ -47,7 +47,13 @@ There is no lint step configured. There is no way to run a single test class in 
 9. Notices
 10. WebSocket broadcast layer
 
-**JWT design:** Claims carry `sub` (userId), `messId`, `role`. After `POST /mess` or `POST /mess/join`, a **new JWT must be issued** (the signup token has no messId). Both create-mess and join-mess responses return a fresh token alongside the mess details.
+**JWT design:** Claims carry `sub` (userId), `messId`, `role`. After `POST /mess` or `POST /mess/join`, a **new JWT must be issued** (the signup token has no messId). Both create-mess and join-mess responses return a fresh token alongside the mess details. `JwtUtils.generateToken()` is in `util/JwtUtils.kt` and accepts optional `messId` + `role` — use it for all token minting.
+
+**Auth patterns (established in step 2):**
+- Custom domain exceptions live in `util/AppExceptions.kt` — throw them from services, `StatusPages.kt` maps them to HTTP codes. Never `call.respond` an error directly from a service.
+- Exposed DSL transactions: use `newSuspendedTransaction(Dispatchers.IO) { ... }` in every service method. Use `Table.insert { ... }` and read back `result[Table.id].value` for the generated UUID — `insertAndGetId` is not available on `UUIDTable`.
+- JWT principal extraction: `call.principal<JWTPrincipal>()!!.payload.subject` gives the `userId` string; `payload.getClaim("messId").asString()` gives messId (null before joining a mess).
+- `Json { encodeDefaults = true }` is set — the `success` field on `ApiSuccess`/`ApiFailure` is always serialized.
 
 **Standard error codes** (defined in spec, implement in StatusPages + routes): `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` 400, `INVALID_JOIN_CODE` 400, `DUPLICATE_ENTRY` 409, `CYCLE_ALREADY_CLOSED` 400, `INTERNAL_ERROR` 500.
 
