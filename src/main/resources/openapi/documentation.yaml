@@ -6,4 +6,156 @@ info:
 servers:
   - url: "http://localhost:8080"
     description: "Local development"
-paths: {}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: "UNAUTHORIZED"
+        message:
+          type: string
+          example: "Invalid credentials"
+
+    ApiFailure:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          $ref: "#/components/schemas/ApiError"
+
+    TokenResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    UserResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [id, name, phoneOrEmail]
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+              example: "Rahim Khan"
+            phoneOrEmail:
+              type: string
+              example: "rahim@example.com"
+
+paths:
+  /api/v1/auth/signup:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, phoneOrEmail, password]
+              properties:
+                name:
+                  type: string
+                  example: "Rahim Khan"
+                phoneOrEmail:
+                  type: string
+                  example: "rahim@example.com"
+                password:
+                  type: string
+                  example: "secret123"
+      responses:
+        "201":
+          description: User created, JWT returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "409":
+          description: Phone/email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneOrEmail, password]
+              properties:
+                phoneOrEmail:
+                  type: string
+                  example: "rahim@example.com"
+                password:
+                  type: string
+                  example: "secret123"
+      responses:
+        "200":
+          description: Login successful, JWT returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
