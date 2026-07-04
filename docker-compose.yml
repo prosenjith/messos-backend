@@ -14,7 +14,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@messos.local
+      PGADMIN_DEFAULT_EMAIL: admin@messos.dev
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"
