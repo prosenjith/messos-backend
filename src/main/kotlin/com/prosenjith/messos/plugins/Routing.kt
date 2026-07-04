@@ -9,6 +9,7 @@ import com.prosenjith.messos.routes.expenseRoutes
 import com.prosenjith.messos.routes.mealRoutes
 import com.prosenjith.messos.routes.messRoutes
 import com.prosenjith.messos.routes.noticeRoutes
+import com.prosenjith.messos.routes.webSocketRoute
 import com.prosenjith.messos.services.AuthService
 import com.prosenjith.messos.services.CycleService
 import com.prosenjith.messos.services.DepositService
@@ -43,6 +44,7 @@ fun Application.configureRouting(config: AppConfig) {
             duesRoutes(duesService)
             cycleRoutes(cycleService)
             noticeRoutes(noticeService)
+            webSocketRoute(config.jwt)
         }
     }
 }

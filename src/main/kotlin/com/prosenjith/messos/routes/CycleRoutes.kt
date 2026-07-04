@@ -8,7 +8,9 @@ import com.prosenjith.messos.services.CycleCloseRecord
 import com.prosenjith.messos.services.CycleHistoryRecord
 import com.prosenjith.messos.services.CycleMemberSummaryRecord
 import com.prosenjith.messos.services.CycleService
+import com.prosenjith.messos.models.ws.WsEvent
 import com.prosenjith.messos.util.ForbiddenException
+import com.prosenjith.messos.util.WebSocketManager
 import io.ktor.http.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -28,6 +30,10 @@ fun Route.cycleRoutes(cycleService: CycleService) {
 
                 val record = cycleService.closeCycle(callerUserId, messId)
                 call.respond(HttpStatusCode.OK, ApiSuccess(data = record.toResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("CYCLE_CLOSED", mapOf(
+                    "cycleId" to record.cycleId.toString(),
+                    "newCycleId" to record.newCycleId.toString()
+                )))
             }
 
             get("/history") {

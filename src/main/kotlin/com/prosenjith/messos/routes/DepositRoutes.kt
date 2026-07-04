@@ -6,8 +6,10 @@ import com.prosenjith.messos.models.deposit.DepositResponse
 import com.prosenjith.messos.models.meal.DeletedResponse
 import com.prosenjith.messos.services.DepositRecord
 import com.prosenjith.messos.services.DepositService
+import com.prosenjith.messos.models.ws.WsEvent
 import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.ValidationException
+import com.prosenjith.messos.util.WebSocketManager
 import io.ktor.http.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -35,6 +37,7 @@ fun Route.depositRoutes(depositService: DepositService) {
                 val deposit = depositService.addDeposit(callerUserId, messId, targetUserId,
                     req.amount, req.date)
                 call.respond(HttpStatusCode.Created, ApiSuccess(data = deposit.toResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("DEPOSIT_ADDED", mapOf("depositId" to deposit.id.toString())))
             }
 
             get {
@@ -61,6 +64,7 @@ fun Route.depositRoutes(depositService: DepositService) {
                 }
                 depositService.deleteDeposit(callerUserId, messId, depositId)
                 call.respond(ApiSuccess(data = DeletedResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("DEPOSIT_DELETED", mapOf("depositId" to depositId.toString())))
             }
         }
     }

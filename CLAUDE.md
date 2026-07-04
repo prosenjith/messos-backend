@@ -45,7 +45,7 @@ There is no lint step configured. There is no way to run a single test class in 
 7. ✅ GET /dues endpoint
 8. ✅ Monthly Cycle close
 9. ✅ Notices
-10. WebSocket broadcast layer
+10. ✅ WebSocket broadcast layer
 
 **JWT design:** Claims carry `sub` (userId), `messId`, `role`. After `POST /mess` or `POST /mess/join`, a **new JWT must be issued** (the signup token has no messId). Both create-mess and join-mess responses return a fresh token alongside the mess details. `JwtUtils.generateToken()` is in `util/JwtUtils.kt` and accepts optional `messId` + `role` — use it for all token minting.
 

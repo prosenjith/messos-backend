@@ -6,8 +6,10 @@ import com.prosenjith.messos.models.meal.LogMealRequest
 import com.prosenjith.messos.models.meal.MealResponse
 import com.prosenjith.messos.services.MealRecord
 import com.prosenjith.messos.services.MealService
+import com.prosenjith.messos.models.ws.WsEvent
 import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.ValidationException
+import com.prosenjith.messos.util.WebSocketManager
 import io.ktor.http.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -36,6 +38,7 @@ fun Route.mealRoutes(mealService: MealService) {
                 val meal = mealService.logMeal(callerUserId, messId, targetUserId, req.date,
                     req.breakfastCount, req.lunchCount, req.dinnerCount)
                 call.respond(HttpStatusCode.OK, ApiSuccess(data = meal.toResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("MEAL_UPDATED", mapOf("mealId" to meal.id.toString())))
             }
 
             get {
@@ -63,6 +66,7 @@ fun Route.mealRoutes(mealService: MealService) {
 
                 mealService.deleteMeal(callerUserId, messId, mealId)
                 call.respond(ApiSuccess(data = DeletedResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("MEAL_DELETED", mapOf("mealId" to mealId.toString())))
             }
         }
     }

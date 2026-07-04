@@ -6,8 +6,10 @@ import com.prosenjith.messos.models.notice.NoticeResponse
 import com.prosenjith.messos.models.notice.PostNoticeRequest
 import com.prosenjith.messos.services.NoticeRecord
 import com.prosenjith.messos.services.NoticeService
+import com.prosenjith.messos.models.ws.WsEvent
 import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.ValidationException
+import com.prosenjith.messos.util.WebSocketManager
 import io.ktor.http.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -29,6 +31,7 @@ fun Route.noticeRoutes(noticeService: NoticeService) {
                 val req = call.receive<PostNoticeRequest>()
                 val notice = noticeService.postNotice(callerUserId, messId, req.message)
                 call.respond(HttpStatusCode.Created, ApiSuccess(data = notice.toResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("NOTICE_POSTED", mapOf("noticeId" to notice.id.toString())))
             }
 
             get {
@@ -55,6 +58,7 @@ fun Route.noticeRoutes(noticeService: NoticeService) {
                 }
                 noticeService.deleteNotice(callerUserId, messId, noticeId)
                 call.respond(ApiSuccess(data = DeletedResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("NOTICE_DELETED", mapOf("noticeId" to noticeId.toString())))
             }
         }
     }

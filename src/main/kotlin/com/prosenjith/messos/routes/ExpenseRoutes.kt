@@ -6,8 +6,10 @@ import com.prosenjith.messos.models.expense.ExpenseResponse
 import com.prosenjith.messos.models.meal.DeletedResponse
 import com.prosenjith.messos.services.ExpenseRecord
 import com.prosenjith.messos.services.ExpenseService
+import com.prosenjith.messos.models.ws.WsEvent
 import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.ValidationException
+import com.prosenjith.messos.util.WebSocketManager
 import io.ktor.http.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -30,6 +32,7 @@ fun Route.expenseRoutes(expenseService: ExpenseService) {
                 val expense = expenseService.addExpense(callerUserId, messId, req.amount, req.date,
                     req.note, req.receiptPhotoUrl)
                 call.respond(HttpStatusCode.Created, ApiSuccess(data = expense.toResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("EXPENSE_ADDED", mapOf("expenseId" to expense.id.toString())))
             }
 
             get {
@@ -56,6 +59,7 @@ fun Route.expenseRoutes(expenseService: ExpenseService) {
                 }
                 expenseService.deleteExpense(callerUserId, messId, expenseId)
                 call.respond(ApiSuccess(data = DeletedResponse()))
+                WebSocketManager.broadcastToMess(messId, WsEvent("EXPENSE_DELETED", mapOf("expenseId" to expenseId.toString())))
             }
         }
     }
