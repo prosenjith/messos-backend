@@ -1,0 +1,9 @@
+openapi: "3.1.0"
+info:
+  title: "MessOS API"
+  description: "Backend API for the MessOS mess management application"
+  version: "1.0.0"
+servers:
+  - url: "http://localhost:8080"
+    description: "Local development"
+paths: {}
