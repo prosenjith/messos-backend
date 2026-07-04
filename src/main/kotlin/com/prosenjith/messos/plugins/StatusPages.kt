@@ -25,6 +25,9 @@ fun Application.configureStatusPages() {
         exception<ValidationException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, ApiFailure(error = ApiError("VALIDATION_ERROR", cause.message ?: "Validation error")))
         }
+        exception<InvalidJoinCodeException> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ApiFailure(error = ApiError("INVALID_JOIN_CODE", cause.message ?: "Invalid join code")))
+        }
         exception<Throwable> { call, cause ->
             call.application.log.error("Unhandled exception", cause)
             call.respond(

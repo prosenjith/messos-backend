@@ -38,7 +38,7 @@ There is no lint step configured. There is no way to run a single test class in 
 **Build sequence (implemented step by step):**
 1. ✅ Skeleton + DB + Swagger
 2. ✅ Auth (signup/login/JWT)
-3. Mess + MessMember
+3. ✅ Mess + MessMember
 4. Meals
 5. Expenses + Deposits
 6. DuesCalculator pure function + unit tests
@@ -54,6 +54,14 @@ There is no lint step configured. There is no way to run a single test class in 
 - Exposed DSL transactions: use `newSuspendedTransaction(Dispatchers.IO) { ... }` in every service method. Use `Table.insert { ... }` and read back `result[Table.id].value` for the generated UUID — `insertAndGetId` is not available on `UUIDTable`.
 - JWT principal extraction: `call.principal<JWTPrincipal>()!!.payload.subject` gives the `userId` string; `payload.getClaim("messId").asString()` gives messId (null before joining a mess).
 - `Json { encodeDefaults = true }` is set — the `success` field on `ApiSuccess`/`ApiFailure` is always serialized.
+
+**Mess patterns (established in step 3):**
+- One-mess-per-user is enforced by querying `MessMembers` before any insert in `MessService` — throw `ValidationException` if already a member.
+- `POST /mess` creates the mess, member row (role=MANAGER), and first `MonthlyCycle` (status=OPEN, start_date=today UTC) all in a single `newSuspendedTransaction`.
+- Join codes are 8-char uppercase alphanumeric, generated in `MessService.generateJoinCode()`. Input is normalised with `.uppercase()` in `joinMess`.
+- After create/join, a fresh JWT with `messId` + `role` is returned alongside the mess payload — callers must swap their token.
+- `GET /mess/{id}` uses an `innerJoin` between `MessMembers` and `Users` to return the member list in one query.
+- Internal service models (`MessRecord`, `MemberRecord`, `MessWithToken`, `MessDetail`) live in `services/MessService.kt`; serializable DTOs live in `models/mess/MessDtos.kt`.
 
 **Standard error codes** (defined in spec, implement in StatusPages + routes): `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` 400, `INVALID_JOIN_CODE` 400, `DUPLICATE_ENTRY` 409, `CYCLE_ALREADY_CLOSED` 400, `INTERNAL_ERROR` 500.
 

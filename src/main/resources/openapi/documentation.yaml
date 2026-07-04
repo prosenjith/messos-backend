@@ -72,6 +72,86 @@ components:
               type: string
               example: "rahim@example.com"
 
+    MessResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Rahim's Mess"
+        joinCode:
+          type: string
+          example: "ABC12345"
+        managerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    MemberInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Rahim Khan"
+        role:
+          type: string
+          enum: [MANAGER, MEMBER]
+
+    MessWithTokenResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [mess, token]
+          properties:
+            mess:
+              $ref: "#/components/schemas/MessResponse"
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    MessDetailResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [id, name, joinCode, managerId, createdAt, members]
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+              example: "Rahim's Mess"
+            joinCode:
+              type: string
+              example: "ABC12345"
+            managerId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            members:
+              type: array
+              items:
+                $ref: "#/components/schemas/MemberInfo"
+
 paths:
   /api/v1/auth/signup:
     post:
@@ -153,6 +233,116 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/mess:
+    post:
+      tags: [Mess]
+      summary: Create a new mess
+      description: Creates the mess, auto-opens the first monthly cycle, and returns a new JWT containing messId and role=MANAGER.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: "Rahim's Mess"
+      responses:
+        "201":
+          description: Mess created; new JWT issued with messId and role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessWithTokenResponse"
+        "400":
+          description: Validation error (blank name or already in a mess)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/mess/join:
+    post:
+      tags: [Mess]
+      summary: Join a mess via join code
+      description: Validates the join code, adds the user as MEMBER, and returns a new JWT with messId and role=MEMBER.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [joinCode]
+              properties:
+                joinCode:
+                  type: string
+                  example: "ABC12345"
+      responses:
+        "200":
+          description: Joined successfully; new JWT issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessWithTokenResponse"
+        "400":
+          description: Invalid join code or already in a mess
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/mess/{id}:
+    get:
+      tags: [Mess]
+      summary: Get mess details
+      description: Returns mess info and member list. Caller must be a member of the mess.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Mess details with member list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessDetailResponse"
+        "403":
+          description: Caller is not a member of this mess
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
         "401":
           description: Missing or invalid token
           content:
