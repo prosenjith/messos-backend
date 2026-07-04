@@ -2,12 +2,14 @@ package com.prosenjith.messos.plugins
 
 import com.prosenjith.messos.config.AppConfig
 import com.prosenjith.messos.routes.authRoutes
+import com.prosenjith.messos.routes.cycleRoutes
 import com.prosenjith.messos.routes.depositRoutes
 import com.prosenjith.messos.routes.duesRoutes
 import com.prosenjith.messos.routes.expenseRoutes
 import com.prosenjith.messos.routes.mealRoutes
 import com.prosenjith.messos.routes.messRoutes
 import com.prosenjith.messos.services.AuthService
+import com.prosenjith.messos.services.CycleService
 import com.prosenjith.messos.services.DepositService
 import com.prosenjith.messos.services.DuesService
 import com.prosenjith.messos.services.ExpenseService
@@ -24,6 +26,7 @@ fun Application.configureRouting(config: AppConfig) {
     val expenseService = ExpenseService()
     val depositService = DepositService()
     val duesService = DuesService()
+    val cycleService = CycleService()
 
     routing {
         swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
@@ -35,6 +38,7 @@ fun Application.configureRouting(config: AppConfig) {
             expenseRoutes(expenseService)
             depositRoutes(depositService)
             duesRoutes(duesService)
+            cycleRoutes(cycleService)
         }
     }
 }

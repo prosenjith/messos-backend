@@ -28,6 +28,9 @@ fun Application.configureStatusPages() {
         exception<InvalidJoinCodeException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, ApiFailure(error = ApiError("INVALID_JOIN_CODE", cause.message ?: "Invalid join code")))
         }
+        exception<CycleAlreadyClosedException> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ApiFailure(error = ApiError("CYCLE_ALREADY_CLOSED", cause.message ?: "No open cycle found")))
+        }
         exception<Throwable> { call, cause ->
             call.application.log.error("Unhandled exception", cause)
             call.respond(
