@@ -39,7 +39,7 @@ There is no lint step configured. There is no way to run a single test class in 
 1. ✅ Skeleton + DB + Swagger
 2. ✅ Auth (signup/login/JWT)
 3. ✅ Mess + MessMember
-4. Meals
+4. ✅ Meals
 5. Expenses + Deposits
 6. DuesCalculator pure function + unit tests
 7. GET /dues endpoint
@@ -54,6 +54,11 @@ There is no lint step configured. There is no way to run a single test class in 
 - Exposed DSL transactions: use `newSuspendedTransaction(Dispatchers.IO) { ... }` in every service method. Use `Table.insert { ... }` and read back `result[Table.id].value` for the generated UUID — `insertAndGetId` is not available on `UUIDTable`.
 - JWT principal extraction: `call.principal<JWTPrincipal>()!!.payload.subject` gives the `userId` string; `payload.getClaim("messId").asString()` gives messId (null before joining a mess).
 - `Json { encodeDefaults = true }` is set — the `success` field on `ApiSuccess`/`ApiFailure` is always serialized.
+
+**Meal patterns (established in step 4):**
+- `POST /meals` is an upsert keyed on (memberId, date). Conflict columns are `Meals.memberId` and `Meals.date`. **Must pass `onUpdateExclude = listOf(Meals.id, Meals.messId, Meals.memberId, Meals.date)`** — without it, Exposed includes all columns in the UPDATE SET, which regenerates the UUID primary key on conflict (Exposed 0.61.0 known behaviour).
+- Authorization gate: check `messId` claim in JWT — if null, throw `ForbiddenException("You must join a mess first")`. Extract with `principal.payload.getClaim("messId").asString()`.
+- `deleteWhere { }` lambda has receiver `T.(ISqlExpressionBuilder) -> Op<Boolean>`, not `SqlExpressionBuilder`. Use `with(it) { Meals.id eq mealId }` to bring `ISqlExpressionBuilder` in scope, enabling the `eq` extension function.
 
 **Mess patterns (established in step 3):**
 - One-mess-per-user is enforced by querying `MessMembers` before any insert in `MessService` — throw `ValidationException` if already a member.

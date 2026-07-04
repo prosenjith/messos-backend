@@ -152,6 +152,69 @@ components:
               items:
                 $ref: "#/components/schemas/MemberInfo"
 
+    MealResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [id, memberId, memberName, date, breakfastCount, lunchCount, dinnerCount, updatedAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            memberId:
+              type: string
+              format: uuid
+            memberName:
+              type: string
+              example: "Rahim Khan"
+            date:
+              type: string
+              format: date
+              example: "2026-07-04"
+            breakfastCount:
+              type: number
+              example: 1.0
+            lunchCount:
+              type: number
+              example: 1.0
+            dinnerCount:
+              type: number
+              example: 0.5
+            updatedAt:
+              type: string
+              format: date-time
+
+    MealListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MealResponse/properties/data"
+
+    DeletedResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            deleted:
+              type: boolean
+              example: true
+
 paths:
   /api/v1/auth/signup:
     post:
@@ -345,6 +408,143 @@ paths:
                 $ref: "#/components/schemas/ApiFailure"
         "401":
           description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/meals:
+    post:
+      tags: [Meals]
+      summary: Log or update meal counts for a member on a date
+      description: |
+        Upserts meal counts for the given member and date within the current open cycle.
+        MANAGER can log for any member; MEMBER can only log for themselves.
+        Counts are decimals (0.5 = half-meal).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, date]
+              properties:
+                memberId:
+                  type: string
+                  format: uuid
+                  description: User UUID of the member to log for
+                date:
+                  type: string
+                  format: date
+                  example: "2026-07-04"
+                breakfastCount:
+                  type: number
+                  default: 0.0
+                lunchCount:
+                  type: number
+                  default: 0.0
+                dinnerCount:
+                  type: number
+                  default: 0.0
+      responses:
+        "200":
+          description: Meal logged/updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealResponse"
+        "400":
+          description: Validation error (future date, negative count, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "403":
+          description: Member trying to log for another member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+    get:
+      tags: [Meals]
+      summary: List all meals for the current open cycle
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Meals ordered by date
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        memberId:
+                          type: string
+                          format: uuid
+                        memberName:
+                          type: string
+                        date:
+                          type: string
+                          format: date
+                        breakfastCount:
+                          type: number
+                        lunchCount:
+                          type: number
+                        dinnerCount:
+                          type: number
+                        updatedAt:
+                          type: string
+                          format: date-time
+        "403":
+          description: Not a member of any mess
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/meals/{id}:
+    delete:
+      tags: [Meals]
+      summary: Delete a meal entry
+      description: MANAGER can delete any meal; MEMBER can only delete their own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Meal deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "403":
+          description: Member trying to delete another member's meal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "404":
+          description: Meal not found
           content:
             application/json:
               schema:
