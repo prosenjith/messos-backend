@@ -42,7 +42,7 @@ There is no lint step configured. There is no way to run a single test class in 
 4. ✅ Meals
 5. ✅ Expenses + Deposits
 6. ✅ DuesCalculator pure function + unit tests
-7. GET /dues endpoint
+7. ✅ GET /dues endpoint
 8. Monthly Cycle close
 9. Notices
 10. WebSocket broadcast layer
