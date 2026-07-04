@@ -32,7 +32,7 @@ There is no lint step configured. There is no way to run a single test class in 
 - All config is read once at startup via `config/AppConfig.kt` which wraps `application.yaml`. Add new config keys there first, not inline.
 - DB schema lives in two places that must stay in sync: Exposed table objects in `db/tables/` (Kotlin) and Flyway SQL files in `src/main/resources/db/migration/` (SQL). When you add a column to an Exposed table, also write a new `V{N}__*.sql` migration.
 - Flyway migrations run automatically on startup. Migration files are numbered sequentially (`V1` → users, `V2` → messes, `V3` → mess_members, `V4` → monthly_cycles, `V5` → meals, `V6` → expenses, `V7` → deposits, `V8` → notices). FK order matters — parent tables before children.
-- `DuesCalculator` (step 6, not yet implemented) must be a **pure function** with no DB or HTTP dependencies — inputs: meals + expenses + deposits; output: per-member balances. Tests for it must pass before it is wired into any route.
+- `DuesCalculator` is a **pure function** with no DB or HTTP dependencies — inputs: meals + expenses + deposits; output: per-member balances. Lives in `util/DuesCalculator.kt`. 10 unit tests in `DuesCalculatorTest.kt` all pass.
 - Ktor catalog quirk: the version catalog (`io.ktor:ktor-version-catalog:3.5.0`) uses camelCase for multi-word entries — `server-contentNegotiation`, `server-statusPages`, `server-callLogging`, `server-requestValidation`. WebSockets package is `io.ktor.server.websocket` (singular); Swagger is `io.ktor.server.plugins.swagger`.
 
 **Build sequence (implemented step by step):**
@@ -41,7 +41,7 @@ There is no lint step configured. There is no way to run a single test class in 
 3. ✅ Mess + MessMember
 4. ✅ Meals
 5. ✅ Expenses + Deposits
-6. DuesCalculator pure function + unit tests
+6. ✅ DuesCalculator pure function + unit tests
 7. GET /dues endpoint
 8. Monthly Cycle close
 9. Notices
