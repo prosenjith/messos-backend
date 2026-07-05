@@ -3,7 +3,6 @@
 # ============================================================
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
 
@@ -22,6 +21,8 @@ gradleUserHome/
 *.nar
 out/
 .kotlin/
+# Keep the Gradle wrapper JAR — required for Docker/CI builds
+!gradle/wrapper/gradle-wrapper.jar
 
 # ============================================================
 # IntelliJ IDEA
