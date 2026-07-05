@@ -1,5 +1,8 @@
 # MessOS — Backend Technical Spec
 
+> **Note:** This spec reflects the actual implementation as of 2026-07-06, updated after a
+> post-implementation audit — see git history for the original pre-implementation version.
+
 Implementation-level companion to `MessOS_PRD.md` sections 6 (Data Model) and 7 (API
 Contracts). This document defines exact types, constraints, JSON shapes, and project
 structure so the backend can be scaffolded and implemented directly from it.
@@ -7,6 +10,11 @@ structure so the backend can be scaffolded and implemented directly from it.
 Stack: Kotlin + Ktor + Exposed + PostgreSQL. All money values use `DECIMAL(10,2)`
 (BDT has no subunit in practical use, but 2dp keeps room for paisa/edge cases).
 All IDs are UUID v4. All timestamps are UTC `Instant`, serialized as ISO-8601 strings.
+
+All routes are mounted under the `/api/v1` prefix (e.g. `POST /api/v1/auth/signup`).
+Mess-scoped resource routes (`/meals`, `/expenses`, `/deposits`, `/dues`, `/cycle/*`,
+`/notices`) do **not** include a `{messId}` path segment — the mess is resolved from
+the `messId` claim in the caller's JWT.
 
 ---
 
@@ -152,131 +160,304 @@ All responses are wrapped in a standard envelope (see Section 3). Below are the
 { "userId": "uuid", "token": "jwt-string" }
 ```
 
+**GET /auth/me** *(requires JWT)*
+```json
+// Response
+{ "id": "uuid", "name": "string", "phoneOrEmail": "string" }
+```
+
 ### 2.2 Mess
 
-**POST /mess**
+**POST /mess** *(requires JWT)*
 ```json
 // Request
 { "name": "string" }
-// Response
-{ "messId": "uuid", "name": "string", "joinCode": "string" }
-```
-
-**POST /mess/join**
-```json
-// Request
-{ "joinCode": "string" }
-// Response
-{ "messId": "uuid", "name": "string", "role": "MEMBER" }
-```
-
-**GET /mess/{id}**
-```json
+// Response — nested; callers must swap their token after this call
 {
-  "messId": "uuid",
-  "name": "string",
-  "joinCode": "string",           // only included if caller is MANAGER
-  "members": [
-    { "memberId": "uuid", "userId": "uuid", "name": "string", "role": "MANAGER|MEMBER" }
-  ],
-  "currentCycle": { "cycleId": "uuid", "startDate": "2026-07-01", "status": "OPEN" }
+  "mess": {
+    "id": "uuid",
+    "name": "string",
+    "joinCode": "string",
+    "managerId": "uuid",
+    "createdAt": "iso-8601"
+  },
+  "token": "jwt-string"   // new JWT now containing messId + role=MANAGER
 }
 ```
 
-### 2.3 Meals
-
-**POST /mess/{id}/meals**
+**POST /mess/join** *(requires JWT)*
 ```json
 // Request
+{ "joinCode": "string" }
+// Response — nested; callers must swap their token after this call
 {
-  "memberId": "uuid",             // omit to default to caller's own memberId
+  "mess": {
+    "id": "uuid",
+    "name": "string",
+    "joinCode": "string",
+    "managerId": "uuid",
+    "createdAt": "iso-8601"
+  },
+  "token": "jwt-string"   // new JWT now containing messId + role=MEMBER
+}
+```
+
+**GET /mess/{id}** *(requires JWT; caller must be a member of this mess)*
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "joinCode": "string",
+  "managerId": "uuid",
+  "createdAt": "iso-8601",
+  "members": [
+    { "id": "uuid", "name": "string", "role": "MANAGER|MEMBER" }
+  ]
+}
+```
+
+Notes:
+- `members[].id` is the user's UUID (from the `users` table), not the `mess_members` row UUID.
+- `joinCode` is always returned regardless of the caller's role.
+- `currentCycle` is not included; fetch it via `GET /dues` or `GET /cycle/history`.
+
+### 2.3 Meals
+
+**POST /meals** *(requires JWT with messId claim)*
+```json
+// Request — memberId is required (no default-to-self behaviour)
+{
+  "memberId": "uuid",
   "date": "2026-07-03",
   "breakfastCount": 1.0,
   "lunchCount": 0.0,
   "dinnerCount": 1.0
 }
-// Response — the updated Meal row
-{ "mealId": "uuid", "memberId": "uuid", "date": "2026-07-03",
-  "breakfastCount": 1.0, "lunchCount": 0.0, "dinnerCount": 1.0 }
+// Response — the upserted Meal row
+{
+  "id": "uuid",
+  "memberId": "uuid",
+  "memberName": "string",
+  "date": "2026-07-03",
+  "breakfastCount": 1.0,
+  "lunchCount": 0.0,
+  "dinnerCount": 1.0,
+  "updatedAt": "iso-8601"
+}
 ```
 
-**GET /mess/{id}/meals?month=2026-07**
+**GET /meals** *(requires JWT with messId claim)*
 ```json
-{
-  "meals": [
-    { "mealId": "uuid", "memberId": "uuid", "date": "2026-07-01",
-      "breakfastCount": 1.0, "lunchCount": 1.0, "dinnerCount": 0.0 }
-  ]
-}
+// Response — returns all meals for the current open cycle; no month filter
+[
+  {
+    "id": "uuid",
+    "memberId": "uuid",
+    "memberName": "string",
+    "date": "2026-07-01",
+    "breakfastCount": 1.0,
+    "lunchCount": 1.0,
+    "dinnerCount": 0.0,
+    "updatedAt": "iso-8601"
+  }
+]
+```
+
+**DELETE /meals/{id}** *(requires JWT with messId claim)*
+```json
+// Response
+{ "deleted": true }
 ```
 
 ### 2.4 Expenses & Deposits
 
-**POST /mess/{id}/expenses**
+**POST /expenses** *(requires JWT with messId claim)*
 ```json
 // Request
 { "amount": 1120.00, "date": "2026-07-02", "note": "Rice, dal, veg", "receiptPhotoUrl": null }
-// Response — the created Expense row (includes generated expenseId, cycleId)
+// Response
+{
+  "id": "uuid",
+  "amount": 1120.00,
+  "date": "2026-07-02",
+  "note": "Rice, dal, veg",
+  "receiptPhotoUrl": null,
+  "loggedBy": "uuid",
+  "loggedByName": "string",
+  "createdAt": "iso-8601"
+}
 ```
 
-**GET /mess/{id}/expenses**
+**GET /expenses** *(requires JWT with messId claim)*
 ```json
-{ "expenses": [ { "expenseId": "uuid", "amount": 1120.00, "date": "2026-07-02",
-  "note": "Rice, dal, veg", "loggedBy": "uuid" } ],
-  "totalThisCycle": 18450.00 }
+// Response — all expenses for the current open cycle; no totalThisCycle aggregate
+[
+  {
+    "id": "uuid",
+    "amount": 1120.00,
+    "date": "2026-07-02",
+    "note": "Rice, dal, veg",
+    "receiptPhotoUrl": null,
+    "loggedBy": "uuid",
+    "loggedByName": "string",
+    "createdAt": "iso-8601"
+  }
+]
 ```
 
-**POST /mess/{id}/deposits**
+**DELETE /expenses/{id}** *(requires JWT with messId claim)*
+```json
+// Response
+{ "deleted": true }
+```
+
+**POST /deposits** *(requires JWT with messId claim)*
 ```json
 // Request
 { "memberId": "uuid", "amount": 3400.00, "date": "2026-07-01" }
+// Response
+{
+  "id": "uuid",
+  "memberId": "uuid",
+  "memberName": "string",
+  "amount": 3400.00,
+  "date": "2026-07-01",
+  "loggedBy": "uuid",
+  "loggedByName": "string",
+  "createdAt": "iso-8601"
+}
 ```
 
-**GET /mess/{id}/deposits** — same list + per-member-filterable via `?memberId=`
+**GET /deposits** *(requires JWT with messId claim)*
+```json
+// Response — all deposits for the current open cycle; no ?memberId filter
+[
+  {
+    "id": "uuid",
+    "memberId": "uuid",
+    "memberName": "string",
+    "amount": 3400.00,
+    "date": "2026-07-01",
+    "loggedBy": "uuid",
+    "loggedByName": "string",
+    "createdAt": "iso-8601"
+  }
+]
+```
+
+**DELETE /deposits/{id}** *(requires JWT with messId claim)*
+```json
+// Response
+{ "deleted": true }
+```
 
 ### 2.5 Dues
 
-**GET /mess/{id}/dues**
+**GET /dues** *(requires JWT with messId claim)*
 ```json
 {
   "cycleId": "uuid",
+  "cycleStartDate": "2026-07-01",
   "mealRate": 80.00,
   "totalMeals": 320.0,
-  "totalBazaar": 25600.00,
-  "members": [
+  "totalExpenses": 25600.00,
+  "balances": [
     {
-      "memberId": "uuid", "name": "string",
-      "mealsEaten": 58.0, "mealCost": 4640.00,
-      "depositsPaid": 3400.00,
-      "balance": -1240.00   // negative = owes, positive = owed
+      "memberId": "uuid",
+      "memberName": "string",
+      "totalMeals": 58.0,
+      "mealCost": 4640.00,
+      "totalDeposited": 3400.00,
+      "balance": -1240.00   // negative = owes, positive = owed back
     }
   ]
 }
 ```
 
-**POST /mess/{id}/cycle/close**
+**POST /cycle/close** *(requires JWT with messId claim; caller must be MANAGER)*
 ```json
 // Response
-{ "cycleId": "uuid", "closedAt": "timestamp", "summary": [ /* same shape as dues.members */ ] }
+{
+  "cycleId": "uuid",
+  "startDate": "2026-07-01",
+  "endDate": "2026-07-31",
+  "mealRate": 80.00,
+  "totalExpenses": 25600.00,
+  "totalMeals": 320.0,
+  "closedAt": "iso-8601",
+  "balances": [
+    {
+      "memberId": "uuid",
+      "memberName": "string",
+      "totalMeals": 58.0,
+      "mealCost": 4640.00,
+      "totalDeposited": 3400.00,
+      "balance": -1240.00
+    }
+  ],
+  "newCycleId": "uuid",
+  "newCycleStartDate": "2026-08-01"
+}
 ```
 
-**GET /mess/{id}/cycle/history**
+**GET /cycle/history** *(requires JWT with messId claim)*
 ```json
-{ "cycles": [ { "cycleId": "uuid", "startDate": "...", "endDate": "...",
-  "mealRateSnapshot": 80.00, "summary": [ /* per-member balances at close */ ] } ] }
+// Response — array of closed cycles, newest first
+[
+  {
+    "cycleId": "uuid",
+    "startDate": "2026-07-01",
+    "endDate": "2026-07-31",
+    "mealRate": 80.00,
+    "closedAt": "iso-8601",
+    "balances": [
+      {
+        "memberId": "uuid",
+        "memberName": "string",
+        "totalMeals": 58.0,
+        "mealCost": 4640.00,
+        "totalDeposited": 3400.00,
+        "balance": -1240.00
+      }
+    ]
+  }
+]
 ```
 
 ### 2.6 Notices
 
-**POST /mess/{id}/notices**
+**POST /notices** *(requires JWT with messId claim)*
 ```json
 // Request
 { "message": "Bazaar money due by Friday" }
+// Response
+{
+  "id": "uuid",
+  "message": "Bazaar money due by Friday",
+  "postedBy": "uuid",
+  "postedByName": "string",
+  "createdAt": "iso-8601"
+}
 ```
 
-**GET /mess/{id}/notices**
+**GET /notices** *(requires JWT with messId claim)*
 ```json
-{ "notices": [ { "noticeId": "uuid", "message": "string", "postedBy": "string", "createdAt": "timestamp" } ] }
+// Response — raw array
+[
+  {
+    "id": "uuid",
+    "message": "string",
+    "postedBy": "uuid",
+    "postedByName": "string",
+    "createdAt": "iso-8601"
+  }
+]
+```
+
+**DELETE /notices/{id}** *(requires JWT with messId claim)*
+```json
+// Response
+{ "deleted": true }
 ```
 
 ---
@@ -315,34 +496,41 @@ can handle all responses uniformly:
 - **Expiry:** 30 days for v1 (no refresh token flow — simplicity over security
   hardening at MVP stage; revisit before any real production launch)
 - **Header:** `Authorization: Bearer <token>`
-- Every mess-scoped endpoint (`/mess/{id}/...`) must verify the JWT's `messId`
-  claim matches the `{id}` in the path, and that `role` permits the action
-  (see PRD section 4 permission table) — enforced server-side, never trusted
-  from the client.
+- Every mess-scoped endpoint must verify the JWT's `messId` claim is present; the
+  mess ID is taken from the JWT, not from the URL. Role-based permission checks
+  (e.g. MANAGER-only for `POST /cycle/close`) are enforced server-side.
 
 ---
 
 ## 5. WebSocket Events
 
-**Endpoint:** `ws/mess/{id}` — connect with JWT in the initial handshake
-(`Authorization` header or `?token=` query param).
+**Endpoint:** `GET /api/v1/ws?token=<jwt>` — connect with JWT in the query string.
+The `messId` claim must be present in the token (i.e. the caller must have joined
+a mess). Authorization header is not supported for the WebSocket upgrade.
 
 All server-pushed messages share this envelope:
 ```json
-{ "event": "MEAL_UPDATED", "data": { /* shape matches the relevant REST response */ }, "timestamp": "iso-8601" }
+{ "type": "MEAL_UPDATED", "data": { "mealId": "uuid" } }
 ```
 
-| Event | Sent when | `data` shape |
-|---|---|---|
-| `MEAL_UPDATED` | Any meal entry created/edited | Same as POST /meals response |
-| `EXPENSE_ADDED` | New bazaar expense logged | Same as POST /expenses response |
-| `DEPOSIT_ADDED` | New deposit logged | Same as POST /deposits response |
-| `DUES_RECALCULATED` | After any meal/expense/deposit change | Same as GET /dues response |
-| `NOTICE_POSTED` | New notice posted | Same as POST /notices response |
-| `CYCLE_CLOSED` | Manager closes the month | Same as POST /cycle/close response |
+`data` carries only the ID of the affected resource. Clients should re-fetch the
+relevant REST endpoint on receipt rather than using the WebSocket payload directly.
 
-Client behavior: on `DUES_RECALCULATED`, refresh the home screen dues display;
-on other events, refresh the relevant list/screen if currently visible.
+| Event | Sent when | `data` key |
+|---|---|---|
+| `MEAL_UPDATED` | Any meal entry created or edited | `mealId` |
+| `MEAL_DELETED` | A meal entry is deleted | `mealId` |
+| `EXPENSE_ADDED` | New bazaar expense logged | `expenseId` |
+| `EXPENSE_DELETED` | An expense is deleted | `expenseId` |
+| `DEPOSIT_ADDED` | New deposit logged | `depositId` |
+| `DEPOSIT_DELETED` | A deposit is deleted | `depositId` |
+| `NOTICE_POSTED` | New notice posted | `noticeId` |
+| `NOTICE_DELETED` | A notice is deleted | `noticeId` |
+| `CYCLE_CLOSED` | Manager closes the month | `cycleId`, `newCycleId` |
+
+Client behavior: on any event, refresh the relevant list or screen if currently
+visible. There is no `DUES_RECALCULATED` push event; the client should re-fetch
+`GET /dues` after any meal, expense, or deposit mutation.
 
 ---
 
@@ -354,29 +542,36 @@ messos-backend/
 ├── settings.gradle.kts
 ├── src/main/kotlin/com/prosenjith/messos/
 │   ├── Application.kt              // main(), module configuration
+│   ├── config/
+│   │   └── AppConfig.kt            // reads application.yaml once at startup
 │   ├── plugins/
 │   │   ├── Security.kt             // JWT setup
 │   │   ├── Serialization.kt        // kotlinx.serialization config
 │   │   ├── Sockets.kt              // WebSocket plugin config
-│   │   └── Databases.kt            // Exposed + connection pool setup
-│   ├── db/
-│   │   └── Tables.kt               // all Exposed table objects (Section 1)
+│   │   ├── Databases.kt            // Exposed + connection pool setup
+│   │   ├── Routing.kt              // mounts all route extensions under /api/v1
+│   │   └── StatusPages.kt          // maps AppExceptions to HTTP status codes
+│   ├── db/tables/                  // one file per Exposed table object
 │   ├── models/
-│   │   └── Dtos.kt                 // request/response data classes (Section 2)
-│   ├── routes/
-│   │   ├── AuthRoutes.kt
-│   │   ├── MessRoutes.kt
-│   │   ├── MealRoutes.kt
-│   │   ├── ExpenseRoutes.kt
-│   │   ├── DepositRoutes.kt
-│   │   ├── DuesRoutes.kt
-│   │   └── NoticeRoutes.kt
-│   ├── services/
-│   │   ├── DuesCalculator.kt       // the core hisab engine — pure function, unit-testable
-│   │   └── MessService.kt, MealService.kt, etc.
-│   └── websocket/
-│       └── MessSocketManager.kt    // tracks connections per mess, broadcasts events
-└── src/test/kotlin/...             // unit tests, especially for DuesCalculator
+│   │   ├── ApiResponse.kt          // ApiSuccess<T> / ApiFailure envelope
+│   │   ├── auth/AuthDtos.kt
+│   │   ├── mess/MessDtos.kt
+│   │   ├── meal/MealDtos.kt
+│   │   ├── expense/ExpenseDtos.kt
+│   │   ├── deposit/DepositDtos.kt
+│   │   ├── dues/DuesDtos.kt
+│   │   ├── cycle/CycleDtos.kt
+│   │   ├── notice/NoticeDtos.kt
+│   │   └── ws/WsEvent.kt
+│   ├── routes/                     // one file per resource
+│   ├── services/                   // business logic; return typed *Record data classes
+│   └── util/
+│       ├── AppExceptions.kt        // domain exception hierarchy
+│       ├── DuesCalculator.kt       // pure function — inputs: meals+expenses+deposits → balances
+│       ├── JwtUtils.kt             // generateToken(userId, messId?, role?)
+│       ├── PasswordUtils.kt
+│       └── WebSocketManager.kt     // ConcurrentHashMap<messId, Set<session>>
+└── src/test/kotlin/...             // unit tests (DuesCalculatorTest has 10 cases)
 ```
 
 **Why `DuesCalculator` is called out specifically:** this is the single most
