@@ -18,8 +18,10 @@ import com.prosenjith.messos.services.ExpenseService
 import com.prosenjith.messos.services.MealService
 import com.prosenjith.messos.services.MessService
 import com.prosenjith.messos.services.NoticeService
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.swagger.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 fun Application.configureRouting(config: AppConfig) {
@@ -33,6 +35,10 @@ fun Application.configureRouting(config: AppConfig) {
     val noticeService = NoticeService()
 
     routing {
+        get("/health") {
+            call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+        }
+
         swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
 
         route("/api/v1") {
