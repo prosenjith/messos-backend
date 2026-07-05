@@ -1,5 +1,7 @@
 # MessOS Backend
 
+[![CI/CD](https://github.com/prosenjith/messos-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/prosenjith/messos-backend/actions/workflows/ci.yml)
+
 A production-ready REST API for shared-mess household management — tracking meals, expenses, deposits, and dues for groups of people sharing a common kitchen.
 
 Built with **Kotlin 2.4 · Ktor 3.5 · Exposed ORM · PostgreSQL 16**.
