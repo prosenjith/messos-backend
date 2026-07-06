@@ -40,7 +40,6 @@ dependencies {
     implementation(libs.postgresql)
     implementation(libs.hikaricp)
     implementation(libs.flyway.core)
-    implementation(libs.flyway.postgresql)
 
     // Security + Datetime
     implementation(libs.bcrypt)

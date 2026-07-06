@@ -18,7 +18,7 @@ fun Application.configureDatabases(config: AppConfig) {
     }
     val dataSource = HikariDataSource(hikariConfig)
 
-    Flyway.configure(Thread.currentThread().contextClassLoader)
+    Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration")
         .load()
