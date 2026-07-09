@@ -132,6 +132,6 @@ class MessService {
 
     private fun generateJoinCode(): String {
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        return (1..8).map { chars.random() }.joinToString("")
+        return (1..5).map { chars.random() }.joinToString("")
     }
 }
