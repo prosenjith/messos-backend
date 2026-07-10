@@ -28,9 +28,14 @@ fun Route.authRoutes(authService: AuthService, jwtConfig: JwtConfig) {
 
         post("/login") {
             val req = call.receive<LoginRequest>()
-            val user = authService.login(req.phoneOrEmail, req.password)
-            val token = JwtUtils.generateToken(jwtConfig, user.id)
-            call.respond(HttpStatusCode.OK, ApiSuccess(data = TokenResponse(userId = user.id.toString(), token = token)))
+            val result = authService.login(req.phoneOrEmail, req.password)
+            val token = JwtUtils.generateToken(jwtConfig, result.userId, result.messId, result.role)
+            call.respond(HttpStatusCode.OK, ApiSuccess(data = TokenResponse(
+                userId = result.userId.toString(),
+                token = token,
+                messId = result.messId?.toString(),
+                role = result.role
+            )))
         }
 
         authenticate("jwt-auth") {

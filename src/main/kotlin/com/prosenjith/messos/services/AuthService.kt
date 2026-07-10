@@ -1,5 +1,6 @@
 package com.prosenjith.messos.services
 
+import com.prosenjith.messos.db.tables.MessMembers
 import com.prosenjith.messos.db.tables.Users
 import com.prosenjith.messos.util.DuplicateEntryException
 import com.prosenjith.messos.util.PasswordUtils
@@ -11,6 +12,12 @@ import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransacti
 import java.util.UUID
 
 data class UserRecord(val id: UUID, val name: String, val phoneOrEmail: String)
+
+data class LoginResult(
+    val userId: UUID,
+    val messId: UUID?,
+    val role: String?
+)
 
 class AuthService {
 
@@ -29,7 +36,7 @@ class AuthService {
             UserRecord(insertedId, name, phoneOrEmail)
         }
 
-    suspend fun login(phoneOrEmail: String, password: String): UserRecord =
+    suspend fun login(phoneOrEmail: String, password: String): LoginResult =
         newSuspendedTransaction(Dispatchers.IO) {
             val row = Users.selectAll()
                 .where { Users.phoneOrEmail eq phoneOrEmail }
@@ -37,7 +44,15 @@ class AuthService {
             if (!PasswordUtils.verify(password, row[Users.passwordHash])) {
                 throw UnauthorizedException("Invalid credentials")
             }
-            UserRecord(row[Users.id].value, row[Users.name], row[Users.phoneOrEmail])
+            val userId = row[Users.id].value
+            val memberRow = MessMembers.selectAll()
+                .where { MessMembers.userId eq userId }
+                .singleOrNull()
+            LoginResult(
+                userId = userId,
+                messId = memberRow?.get(MessMembers.messId)?.value,
+                role = memberRow?.get(MessMembers.role)?.name
+            )
         }
 
     suspend fun findById(userId: UUID): UserRecord? =
