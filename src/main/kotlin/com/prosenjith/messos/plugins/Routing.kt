@@ -43,7 +43,7 @@ fun Application.configureRouting(config: AppConfig) {
 
         route("/api/v1") {
             authRoutes(authService, config.jwt)
-            messRoutes(messService, config.jwt)
+            messRoutes(messService, authService, config.jwt)
             mealRoutes(mealService)
             expenseRoutes(expenseService)
             depositRoutes(depositService)

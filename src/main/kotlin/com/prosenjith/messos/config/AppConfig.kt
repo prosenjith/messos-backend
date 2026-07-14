@@ -15,7 +15,8 @@ data class JwtConfig(
     val secret: String,
     val issuer: String,
     val audience: String,
-    val expiryDays: Long
+    val expiryDays: Long,
+    val refreshExpiryDays: Long
 )
 
 data class AppConfig(
@@ -35,7 +36,8 @@ data class AppConfig(
             secret = config.property("jwt.secret").getString(),
             issuer = config.property("jwt.issuer").getString(),
             audience = config.property("jwt.audience").getString(),
-            expiryDays = config.property("jwt.expiryDays").getString().toLong()
+            expiryDays = config.property("jwt.expiryDays").getString().toLong(),
+            refreshExpiryDays = config.property("jwt.refreshExpiryDays").getString().toLong()
         )
     )
 }
