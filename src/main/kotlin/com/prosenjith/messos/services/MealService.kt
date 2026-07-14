@@ -1,10 +1,8 @@
 package com.prosenjith.messos.services
 
-import com.prosenjith.messos.db.tables.CycleStatus
 import com.prosenjith.messos.db.tables.MemberRole
 import com.prosenjith.messos.db.tables.Meals
 import com.prosenjith.messos.db.tables.MessMembers
-import com.prosenjith.messos.db.tables.MonthlyCycles
 import com.prosenjith.messos.db.tables.Users
 import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.NotFoundException
@@ -61,19 +59,8 @@ class MealService {
                 throw ForbiddenException("Members can only log their own meals")
             }
 
-            val targetMemberRow = (MessMembers innerJoin Users)
-                .selectAll()
-                .where { (MessMembers.messId eq messId) and (MessMembers.userId eq targetUserId) }
-                .singleOrNull() ?: throw NotFoundException("Member not found in this mess")
-
-            val messMemberId = targetMemberRow[MessMembers.id].value
-            val targetName = targetMemberRow[Users.name]
-
-            val cycle = MonthlyCycles.selectAll()
-                .where { (MonthlyCycles.messId eq messId) and (MonthlyCycles.status eq CycleStatus.OPEN) }
-                .singleOrNull() ?: throw ValidationException("No open cycle found for this mess")
-
-            val cycleStartDate = cycle[MonthlyCycles.startDate]
+            val (messMemberId, targetName) = requireMemberInMess(messId, targetUserId)
+            val cycleStartDate = requireOpenCycle(messId).startDate
             val today = Clock.System.todayIn(TimeZone.UTC)
 
             if (date < cycleStartDate) throw ValidationException("Date is before the current cycle's start date")
@@ -112,11 +99,7 @@ class MealService {
 
     suspend fun getMealsForCurrentCycle(messId: UUID): List<MealRecord> =
         newSuspendedTransaction(Dispatchers.IO) {
-            val cycle = MonthlyCycles.selectAll()
-                .where { (MonthlyCycles.messId eq messId) and (MonthlyCycles.status eq CycleStatus.OPEN) }
-                .singleOrNull() ?: throw ValidationException("No open cycle found for this mess")
-
-            val cycleStartDate = cycle[MonthlyCycles.startDate]
+            val cycleStartDate = requireOpenCycle(messId).startDate
 
             val memberInfo = (MessMembers innerJoin Users)
                 .selectAll()
