@@ -8,7 +8,6 @@ import com.prosenjith.messos.models.mess.MemberInfo
 import com.prosenjith.messos.models.mess.MessDetailResponse
 import com.prosenjith.messos.models.mess.MessResponse
 import com.prosenjith.messos.models.mess.MessWithTokenResponse
-import com.prosenjith.messos.services.AuthService
 import com.prosenjith.messos.services.MessService
 import com.prosenjith.messos.util.ValidationException
 import io.ktor.http.*
@@ -19,19 +18,17 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.util.UUID
 
-fun Route.messRoutes(messService: MessService, authService: AuthService, jwtConfig: JwtConfig) {
+fun Route.messRoutes(messService: MessService, jwtConfig: JwtConfig) {
     authenticate("jwt-auth") {
         post("/mess") {
             val userId = UUID.fromString(call.principal<JWTPrincipal>()!!.payload.subject)
             val req = call.receive<CreateMessRequest>()
             val result = messService.createMess(userId, req.name, jwtConfig)
-            val refreshToken = authService.issueRefreshToken(userId, jwtConfig)
             call.respond(
                 HttpStatusCode.Created,
                 ApiSuccess(data = MessWithTokenResponse(
                     mess = result.mess.toResponse(),
-                    token = result.token,
-                    refreshToken = refreshToken
+                    token = result.token
                 ))
             )
         }
@@ -40,13 +37,11 @@ fun Route.messRoutes(messService: MessService, authService: AuthService, jwtConf
             val userId = UUID.fromString(call.principal<JWTPrincipal>()!!.payload.subject)
             val req = call.receive<JoinMessRequest>()
             val result = messService.joinMess(userId, req.joinCode, jwtConfig)
-            val refreshToken = authService.issueRefreshToken(userId, jwtConfig)
             call.respond(
                 HttpStatusCode.OK,
                 ApiSuccess(data = MessWithTokenResponse(
                     mess = result.mess.toResponse(),
-                    token = result.token,
-                    refreshToken = refreshToken
+                    token = result.token
                 ))
             )
         }

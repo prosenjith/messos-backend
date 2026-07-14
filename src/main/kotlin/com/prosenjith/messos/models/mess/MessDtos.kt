@@ -31,4 +31,4 @@ data class MessDetailResponse(
 )
 
 @Serializable
-data class MessWithTokenResponse(val mess: MessResponse, val token: String, val refreshToken: String)
+data class MessWithTokenResponse(val mess: MessResponse, val token: String)
