@@ -68,6 +68,11 @@ There is no lint step configured. There is no way to run a single test class in 
 - `GET /mess/{id}` uses an `innerJoin` between `MessMembers` and `Users` to return the member list in one query.
 - Internal service models (`MessRecord`, `MemberRecord`, `MessWithToken`, `MessDetail`) live in `services/MessService.kt`; serializable DTOs live in `models/mess/MessDtos.kt`.
 
+**Shared service query helpers (`services/ServiceQueries.kt`):**
+- `requireMemberInMess(messId, userId)` — joins `MessMembers` + `Users`, returns `MemberInfo(memberId, name)`, throws `NotFoundException` if not found.
+- `requireOpenCycle(messId)` — queries `MonthlyCycles` for OPEN status, returns `OpenCycleInfo(id, startDate)`, throws `ValidationException` if none found.
+- Use these helpers in any service method that needs to look up a member or the current cycle — do not inline the raw queries again.
+
 **Standard error codes** (defined in spec, implement in StatusPages + routes): `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` 400, `INVALID_JOIN_CODE` 400, `DUPLICATE_ENTRY` 409, `CYCLE_ALREADY_CLOSED` 400, `INTERNAL_ERROR` 500.
 
 **Cycle summaries (step 8):** `cycle_summaries` table (V9) persists per-member balances at cycle-close time. `POST /cycle/close` atomically: runs DuesCalculator, inserts rows into `cycle_summaries` (stores `member_name` for historical immutability), updates `monthly_cycles` (status=CLOSED, endDate=today, mealRateSnapshot, closedAt), and inserts a new OPEN cycle starting the next day. `GET /cycle/history` reads closed cycles + their summaries ordered newest-first.
