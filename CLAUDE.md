@@ -31,7 +31,7 @@ There is no lint step configured. There is no way to run a single test class in 
 - Every REST response uses `ApiSuccess<T>` or `ApiFailure` from `models/ApiResponse.kt` — never respond with a raw object.
 - All config is read once at startup via `config/AppConfig.kt` which wraps `application.yaml`. Add new config keys there first, not inline.
 - DB schema lives in two places that must stay in sync: Exposed table objects in `db/tables/` (Kotlin) and Flyway SQL files in `src/main/resources/db/migration/` (SQL). When you add a column to an Exposed table, also write a new `V{N}__*.sql` migration.
-- Flyway migrations run automatically on startup. Migration files are numbered sequentially (`V1` → users, `V2` → messes, `V3` → mess_members, `V4` → monthly_cycles, `V5` → meals, `V6` → expenses, `V7` → deposits, `V8` → notices, `V9` → cycle_summaries). FK order matters — parent tables before children.
+- Flyway migrations run automatically on startup. Migration files are numbered sequentially (`V1` → users, `V2` → messes, `V3` → mess_members, `V4` → monthly_cycles, `V5` → meals, `V6` → expenses, `V7` → deposits, `V8` → notices, `V9` → cycle_summaries, `V10` → refresh_tokens, `V11` → profile_image_url on users). FK order matters — parent tables before children.
 - `DuesCalculator` is a **pure function** with no DB or HTTP dependencies — inputs: meals + expenses + deposits; output: per-member balances. Lives in `util/DuesCalculator.kt`. 10 unit tests in `DuesCalculatorTest.kt` all pass.
 - Ktor catalog quirk: the version catalog (`io.ktor:ktor-version-catalog:3.5.0`) uses camelCase for multi-word entries — `server-contentNegotiation`, `server-statusPages`, `server-callLogging`, `server-requestValidation`. WebSockets package is `io.ktor.server.websocket` (singular); Swagger is `io.ktor.server.plugins.swagger`.
 
@@ -46,6 +46,7 @@ There is no lint step configured. There is no way to run a single test class in 
 8. ✅ Monthly Cycle close
 9. ✅ Notices
 10. ✅ WebSocket broadcast layer
+11. ✅ Image upload (S3-backed)
 
 **JWT design:** Claims carry `sub` (userId), `messId`, `role`. After `POST /mess` or `POST /mess/join`, a **new JWT must be issued** (the signup token has no messId). Both create-mess and join-mess responses return a fresh token alongside the mess details. `JwtUtils.generateToken()` is in `util/JwtUtils.kt` and accepts optional `messId` + `role` — use it for all token minting.
 
@@ -76,6 +77,16 @@ There is no lint step configured. There is no way to run a single test class in 
 **Standard error codes** (defined in spec, implement in StatusPages + routes): `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` 400, `INVALID_JOIN_CODE` 400, `DUPLICATE_ENTRY` 409, `CYCLE_ALREADY_CLOSED` 400, `INTERNAL_ERROR` 500.
 
 **Cycle summaries (step 8):** `cycle_summaries` table (V9) persists per-member balances at cycle-close time. `POST /cycle/close` atomically: runs DuesCalculator, inserts rows into `cycle_summaries` (stores `member_name` for historical immutability), updates `monthly_cycles` (status=CLOSED, endDate=today, mealRateSnapshot, closedAt), and inserts a new OPEN cycle starting the next day. `GET /cycle/history` reads closed cycles + their summaries ordered newest-first.
+
+**Image upload patterns (step 11):**
+- Two endpoints: `POST /api/v1/upload` (generic, stores under `public/receipts/<uuid>.<ext>`) and `PUT /api/v1/auth/me/avatar` (uploads + updates `users.profile_image_url`, stores under `public/avatars/<uuid>.<ext>`). Both require JWT auth.
+- `FileStorageService` interface (`util/FileStorageService.kt`) has two implementations: `LocalFileStorageService` (dev/fallback) and `S3FileStorageService` (production). Swap the implementation in `plugins/Routing.kt` — nothing else changes.
+- `S3FileStorageService` uses **AWS SDK for Java v2** (`software.amazon.awssdk:s3` + `url-connection-client`). Do NOT use `aws.sdk.kotlin:s3` — it pulls in conflicting `kotlinx.*` transitive dependencies that break Exposed table object initialization at runtime (`NoClassDefFoundError` on `Messes`/`MonthlyCycles`).
+- `UploadService.parseAndStore(multipart, folder)` validates content-type (image/jpeg, image/png, image/webp only) and size (≤ 5 MB), then delegates to `FileStorageService.store(bytes, extension, folder)`. Throws `ValidationException` for bad type or oversized file.
+- S3 bucket: `messos-uploads` (region `ap-south-1`). Bucket policy grants public `s3:GetObject` on `public/*` only — all uploaded URLs are directly fetchable by clients with no auth header.
+- `StorageConfig` in `AppConfig` holds `s3Bucket` and `s3Region`, read via `${?AWS_S3_BUCKET}` and `${?AWS_REGION}` in `application.conf`. **Do not use `System.getenv()` for Railway env vars** — Ktor's `${?VAR}` config pattern is the only reliable path on Railway.
+- Shadow jar requires `mergeServiceFiles()` (already in `build.gradle.kts`) — AWS SDK for Java v2 registers service providers via `META-INF/services/` and without this, Shadow drops entries silently.
+- `Users.profileImageUrl` is nullable VARCHAR(500) added via V11 migration. `UserResponse` includes `profileImageUrl: String? = null`. `AuthService.updateProfileImage(userId, url)` updates the column and returns the updated `UserRecord`.
 
 **WebSocket patterns (step 10):**
 - Ktor's `authenticate {}` block does not intercept WebSocket upgrades. Auth is handled manually in `routes/WebSocketRoute.kt` by reading `?token=<jwt>` from the query string and verifying with `com.auth0.jwt.JWT.require(...)`.
