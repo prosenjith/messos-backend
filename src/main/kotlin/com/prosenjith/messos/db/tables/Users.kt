@@ -8,5 +8,6 @@ object Users : UUIDTable("users") {
     val name = varchar("name", 100)
     val phoneOrEmail = varchar("phone_or_email", 150).uniqueIndex()
     val passwordHash = varchar("password_hash", 255)
+    val profileImageUrl = varchar("profile_image_url", 500).nullable()
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
 }

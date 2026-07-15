@@ -14,10 +14,11 @@ import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
+import org.jetbrains.exposed.sql.update
 import java.util.UUID
 import kotlin.time.Duration.Companion.days
 
-data class UserRecord(val id: UUID, val name: String, val phoneOrEmail: String)
+data class UserRecord(val id: UUID, val name: String, val phoneOrEmail: String, val profileImageUrl: String? = null)
 
 data class LoginResult(
     val userId: UUID,
@@ -66,7 +67,18 @@ class AuthService {
             Users.selectAll()
                 .where { Users.id eq userId }
                 .singleOrNull()
-                ?.let { UserRecord(it[Users.id].value, it[Users.name], it[Users.phoneOrEmail]) }
+                ?.let { UserRecord(it[Users.id].value, it[Users.name], it[Users.phoneOrEmail], it[Users.profileImageUrl]) }
+        }
+
+    suspend fun updateProfileImage(userId: UUID, url: String): UserRecord =
+        newSuspendedTransaction(Dispatchers.IO) {
+            Users.update({ Users.id eq userId }) {
+                it[profileImageUrl] = url
+            }
+            Users.selectAll()
+                .where { Users.id eq userId }
+                .single()
+                .let { UserRecord(it[Users.id].value, it[Users.name], it[Users.phoneOrEmail], it[Users.profileImageUrl]) }
         }
 
     suspend fun issueRefreshToken(userId: UUID, config: JwtConfig): String =

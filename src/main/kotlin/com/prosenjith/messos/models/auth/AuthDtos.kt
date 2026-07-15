@@ -21,4 +21,9 @@ data class TokenResponse(
 data class RefreshRequest(val refreshToken: String)
 
 @Serializable
-data class UserResponse(val id: String, val name: String, val phoneOrEmail: String)
+data class UserResponse(
+    val id: String,
+    val name: String,
+    val phoneOrEmail: String,
+    val profileImageUrl: String? = null
+)

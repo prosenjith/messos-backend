@@ -19,9 +19,15 @@ data class JwtConfig(
     val refreshExpiryDays: Long
 )
 
+data class StorageConfig(
+    val uploadDir: String,
+    val baseUrl: String
+)
+
 data class AppConfig(
     val database: DatabaseConfig,
-    val jwt: JwtConfig
+    val jwt: JwtConfig,
+    val storage: StorageConfig
 ) {
     constructor(config: ApplicationConfig) : this(
         database = DatabaseConfig(
@@ -38,6 +44,10 @@ data class AppConfig(
             audience = config.property("jwt.audience").getString(),
             expiryDays = config.property("jwt.expiryDays").getString().toLong(),
             refreshExpiryDays = config.property("jwt.refreshExpiryDays").getString().toLong()
+        ),
+        storage = StorageConfig(
+            uploadDir = config.property("storage.uploadDir").getString(),
+            baseUrl = config.property("storage.baseUrl").getString()
         )
     )
 }

@@ -73,7 +73,7 @@ fun Route.authRoutes(authService: AuthService, jwtConfig: JwtConfig) {
                     ?: throw NotFoundException("User not found")
                 call.respond(
                     HttpStatusCode.OK,
-                    ApiSuccess(data = UserResponse(user.id.toString(), user.name, user.phoneOrEmail))
+                    ApiSuccess(data = UserResponse(user.id.toString(), user.name, user.phoneOrEmail, user.profileImageUrl))
                 )
             }
         }

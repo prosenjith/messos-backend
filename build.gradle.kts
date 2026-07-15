@@ -41,6 +41,9 @@ dependencies {
     implementation(libs.hikaricp)
     implementation(libs.flyway.core)
 
+    // AWS S3
+    implementation("aws.sdk.kotlin:s3:1.6.92")
+
     // Security + Datetime
     implementation(libs.bcrypt)
     implementation(libs.kotlinx.datetime)
