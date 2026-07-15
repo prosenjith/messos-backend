@@ -36,8 +36,8 @@ fun Application.configureRouting(config: AppConfig) {
     val duesService = DuesService()
     val cycleService = CycleService()
     val noticeService = NoticeService()
-    val bucket = System.getenv("AWS_S3_BUCKET") ?: error("AWS_S3_BUCKET env var not set")
-    val region = System.getenv("AWS_REGION") ?: error("AWS_REGION env var not set")
+    val bucket = config.storage.s3Bucket.ifBlank { error("AWS_S3_BUCKET env var not set") }
+    val region = config.storage.s3Region.ifBlank { error("AWS_REGION env var not set") }
     val fileStorageService = S3FileStorageService(bucket, region)
     val uploadService = UploadService(fileStorageService)
 

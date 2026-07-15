@@ -21,7 +21,9 @@ data class JwtConfig(
 
 data class StorageConfig(
     val uploadDir: String,
-    val baseUrl: String
+    val baseUrl: String,
+    val s3Bucket: String,
+    val s3Region: String
 )
 
 data class AppConfig(
@@ -47,7 +49,9 @@ data class AppConfig(
         ),
         storage = StorageConfig(
             uploadDir = config.property("storage.uploadDir").getString(),
-            baseUrl = config.property("storage.baseUrl").getString()
+            baseUrl = config.property("storage.baseUrl").getString(),
+            s3Bucket = config.property("storage.s3Bucket").getString(),
+            s3Region = config.property("storage.s3Region").getString()
         )
     )
 }
