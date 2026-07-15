@@ -53,3 +53,7 @@ dependencies {
     testImplementation(ktorLibs.server.testHost)
     testImplementation(libs.mockk)
 }
+
+tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
+    mergeServiceFiles()
+}
