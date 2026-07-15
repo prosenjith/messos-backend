@@ -41,8 +41,9 @@ dependencies {
     implementation(libs.hikaricp)
     implementation(libs.flyway.core)
 
-    // AWS S3
-    implementation("aws.sdk.kotlin:s3:1.6.92")
+    // AWS S3 (Java v2 SDK — avoids kotlinx dependency conflicts with Ktor)
+    implementation("software.amazon.awssdk:s3:2.46.7")
+    implementation("software.amazon.awssdk:url-connection-client:2.46.7")
 
     // Security + Datetime
     implementation(libs.bcrypt)
