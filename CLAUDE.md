@@ -31,8 +31,8 @@ There is no lint step configured. There is no way to run a single test class in 
 - Every REST response uses `ApiSuccess<T>` or `ApiFailure` from `models/ApiResponse.kt` — never respond with a raw object.
 - All config is read once at startup via `config/AppConfig.kt` which wraps `application.yaml`. Add new config keys there first, not inline.
 - DB schema lives in two places that must stay in sync: Exposed table objects in `db/tables/` (Kotlin) and Flyway SQL files in `src/main/resources/db/migration/` (SQL). When you add a column to an Exposed table, also write a new `V{N}__*.sql` migration.
-- Flyway migrations run automatically on startup. Migration files are numbered sequentially (`V1` → users, `V2` → messes, `V3` → mess_members, `V4` → monthly_cycles, `V5` → meals, `V6` → expenses, `V7` → deposits, `V8` → notices, `V9` → cycle_summaries, `V10` → refresh_tokens, `V11` → profile_image_url on users). FK order matters — parent tables before children.
-- `DuesCalculator` is a **pure function** with no DB or HTTP dependencies — inputs: meals + expenses + deposits; output: per-member balances. Lives in `util/DuesCalculator.kt`. 10 unit tests in `DuesCalculatorTest.kt` all pass.
+- Flyway migrations run automatically on startup. Migration files are numbered sequentially (`V1` → users, `V2` → messes, `V3` → mess_members, `V4` → monthly_cycles, `V5` → meals, `V6` → expenses, `V7` → deposits, `V8` → notices, `V9` → cycle_summaries, `V10` → refresh_tokens, `V11` → profile_image_url on users, `V12` → category on expenses). FK order matters — parent tables before children.
+- `DuesCalculator` is a **pure function** with no DB or HTTP dependencies — inputs: meals + expenses + deposits + allMemberUserIds; output: per-member balances. Lives in `util/DuesCalculator.kt`. 13 unit tests in `DuesCalculatorTest.kt` all pass.
 - Ktor catalog quirk: the version catalog (`io.ktor:ktor-version-catalog:3.5.0`) uses camelCase for multi-word entries — `server-contentNegotiation`, `server-statusPages`, `server-callLogging`, `server-requestValidation`. WebSockets package is `io.ktor.server.websocket` (singular); Swagger is `io.ktor.server.plugins.swagger`.
 
 **Build sequence (implemented step by step):**
@@ -47,6 +47,7 @@ There is no lint step configured. There is no way to run a single test class in 
 9. ✅ Notices
 10. ✅ WebSocket broadcast layer
 11. ✅ Image upload (S3-backed)
+12. ✅ Expense categories (BAZAAR / UTILITY)
 
 **JWT design:** Claims carry `sub` (userId), `messId`, `role`. After `POST /mess` or `POST /mess/join`, a **new JWT must be issued** (the signup token has no messId). Both create-mess and join-mess responses return a fresh token alongside the mess details. `JwtUtils.generateToken()` is in `util/JwtUtils.kt` and accepts optional `messId` + `role` — use it for all token minting.
 
@@ -87,6 +88,15 @@ There is no lint step configured. There is no way to run a single test class in 
 - `StorageConfig` in `AppConfig` holds `s3Bucket` and `s3Region`, read via `${?AWS_S3_BUCKET}` and `${?AWS_REGION}` in `application.conf`. **Do not use `System.getenv()` for Railway env vars** — Ktor's `${?VAR}` config pattern is the only reliable path on Railway.
 - Shadow jar requires `mergeServiceFiles()` (already in `build.gradle.kts`) — AWS SDK for Java v2 registers service providers via `META-INF/services/` and without this, Shadow drops entries silently.
 - `Users.profileImageUrl` is nullable VARCHAR(500) added via V11 migration. `UserResponse` includes `profileImageUrl: String? = null`. `AuthService.updateProfileImage(userId, url)` updates the column and returns the updated `UserRecord`.
+
+**Expense category patterns (step 12):**
+- `enum class ExpenseCategory { BAZAAR, UTILITY }` lives in `util/DuesCalculator.kt` (alongside `ExpenseEntry`) — NOT in `db/tables/`, so `DuesCalculator` stays free of DB-layer imports. `Expenses.kt` imports it from `util`.
+- `Expenses.category` is `enumerationByName<ExpenseCategory>("category", 10).default(ExpenseCategory.BAZAAR)`. Added via V12 migration (`ALTER TABLE expenses ADD COLUMN category VARCHAR(10) NOT NULL DEFAULT 'BAZAAR'`).
+- `AddExpenseRequest.category: String = "BAZAAR"` — optional, defaults to BAZAAR for backward compatibility. Validated in `ExpenseService.addExpense()` via `ExpenseCategory.valueOf(categoryStr.uppercase())`; throws `ValidationException` for invalid values.
+- **DuesCalculator formula with categories:** BAZAAR expenses feed `mealRate = totalBazaarExpense / totalMeals`. UTILITY expenses are split equally: `utilityShare = totalUtilityExpense / activeMemberCount`. `balance = totalDeposited − mealCost − utilityShare`.
+- `DuesCalculator.calculate()` takes `allMemberUserIds: List<UUID> = emptyList()` — callers (DuesService, CycleService) pass the full mess member list so members who joined mid-cycle with no meals/deposits still appear in balances and are charged `utilityShare`. The default `emptyList()` keeps all existing unit tests passing (utility=0 → utilityShare=0 for all).
+- `GET /dues` response includes `totalUtilityExpense` (top-level) and `utilityShare` (per-member balance object).
+- `CycleService.closeCycle()` also passes category and `allMemberUserIds` to the calculator so cycle-close balances stored in `cycle_summaries` are correct.
 
 **WebSocket patterns (step 10):**
 - Ktor's `authenticate {}` block does not intercept WebSocket upgrades. Auth is handled manually in `routes/WebSocketRoute.kt` by reading `?token=<jwt>` from the query string and verifying with `com.auth0.jwt.JWT.require(...)`.
