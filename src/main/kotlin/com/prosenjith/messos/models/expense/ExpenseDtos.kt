@@ -7,7 +7,8 @@ data class AddExpenseRequest(
     val amount: Double,
     val date: String,
     val note: String? = null,
-    val receiptPhotoUrl: String? = null
+    val receiptPhotoUrl: String? = null,
+    val category: String = "BAZAAR"
 )
 
 @Serializable
@@ -19,5 +20,6 @@ data class ExpenseResponse(
     val receiptPhotoUrl: String?,
     val loggedBy: String,
     val loggedByName: String,
+    val category: String,
     val createdAt: String
 )

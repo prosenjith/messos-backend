@@ -31,6 +31,7 @@ private fun DuesRecord.toResponse() = DuesResponse(
     cycleStartDate = cycleStartDate,
     mealRate = mealRate,
     totalExpenses = totalExpenses,
+    totalUtilityExpense = totalUtilityExpense,
     totalMeals = totalMeals,
     balances = balances.map {
         MemberBalanceResponse(
@@ -38,6 +39,7 @@ private fun DuesRecord.toResponse() = DuesResponse(
             memberName = it.memberName,
             totalMeals = it.totalMeals,
             mealCost = it.mealCost,
+            utilityShare = it.utilityShare,
             totalDeposited = it.totalDeposited,
             balance = it.balance
         )

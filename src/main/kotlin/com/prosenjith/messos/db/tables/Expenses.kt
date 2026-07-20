@@ -1,5 +1,6 @@
 package com.prosenjith.messos.db.tables
 
+import com.prosenjith.messos.util.ExpenseCategory
 import kotlinx.datetime.Clock
 import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.ReferenceOption
@@ -14,5 +15,6 @@ object Expenses : UUIDTable("expenses") {
     val receiptPhotoUrl = varchar("receipt_photo_url", 500).nullable()
     val loggedBy = reference("logged_by", Users)
     val cycleId = reference("cycle_id", MonthlyCycles)
+    val category = enumerationByName<ExpenseCategory>("category", 10).default(ExpenseCategory.BAZAAR)
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
 }

@@ -6,6 +6,7 @@ import com.prosenjith.messos.db.tables.MemberRole
 import com.prosenjith.messos.db.tables.MessMembers
 import com.prosenjith.messos.db.tables.MonthlyCycles
 import com.prosenjith.messos.db.tables.Users
+import com.prosenjith.messos.util.ExpenseCategory
 import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.NotFoundException
 import com.prosenjith.messos.util.ValidationException
@@ -29,6 +30,7 @@ data class ExpenseRecord(
     val receiptPhotoUrl: String?,
     val loggedByUserId: UUID,
     val loggedByName: String,
+    val category: ExpenseCategory,
     val createdAt: String
 )
 
@@ -40,13 +42,19 @@ class ExpenseService {
         amount: Double,
         dateStr: String,
         note: String?,
-        receiptPhotoUrl: String?
+        receiptPhotoUrl: String?,
+        categoryStr: String
     ): ExpenseRecord {
         if (amount <= 0) throw ValidationException("Expense amount must be greater than zero")
         val date = try {
             LocalDate.parse(dateStr)
         } catch (e: Exception) {
             throw ValidationException("Invalid date format. Use YYYY-MM-DD")
+        }
+        val category = try {
+            ExpenseCategory.valueOf(categoryStr.uppercase())
+        } catch (e: IllegalArgumentException) {
+            throw ValidationException("Invalid category. Must be BAZAAR or UTILITY")
         }
 
         return newSuspendedTransaction(Dispatchers.IO) {
@@ -73,6 +81,7 @@ class ExpenseService {
                 it[Expenses.receiptPhotoUrl] = receiptPhotoUrl
                 it[Expenses.loggedBy] = callerUserId
                 it[Expenses.cycleId] = cycleId
+                it[Expenses.category] = category
             }
 
             val callerName = Users.selectAll()
@@ -87,6 +96,7 @@ class ExpenseService {
                 receiptPhotoUrl = receiptPhotoUrl,
                 loggedByUserId = callerUserId,
                 loggedByName = callerName,
+                category = category,
                 createdAt = result[Expenses.createdAt].toString()
             )
         }
@@ -112,6 +122,7 @@ class ExpenseService {
                         receiptPhotoUrl = row[Expenses.receiptPhotoUrl],
                         loggedByUserId = row[Expenses.loggedBy].value,
                         loggedByName = row[Users.name],
+                        category = row[Expenses.category],
                         createdAt = row[Expenses.createdAt].toString()
                     )
                 }

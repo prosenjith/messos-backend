@@ -30,7 +30,7 @@ fun Route.expenseRoutes(expenseService: ExpenseService) {
 
                 val req = call.receive<AddExpenseRequest>()
                 val expense = expenseService.addExpense(callerUserId, messId, req.amount, req.date,
-                    req.note, req.receiptPhotoUrl)
+                    req.note, req.receiptPhotoUrl, req.category)
                 call.respond(HttpStatusCode.Created, ApiSuccess(data = expense.toResponse()))
                 WebSocketManager.broadcastToMess(messId, WsEvent("EXPENSE_ADDED", mapOf("expenseId" to expense.id.toString())))
             }
@@ -73,5 +73,6 @@ private fun ExpenseRecord.toResponse() = ExpenseResponse(
     receiptPhotoUrl = receiptPhotoUrl,
     loggedBy = loggedByUserId.toString(),
     loggedByName = loggedByName,
+    category = category.name,
     createdAt = createdAt
 )

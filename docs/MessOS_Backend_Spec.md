@@ -1,6 +1,6 @@
 # MessOS — Backend Technical Spec
 
-> **Note:** This spec reflects the actual implementation as of 2026-07-06, updated after a
+> **Note:** This spec reflects the actual implementation as of 2026-07-20, updated after a
 > post-implementation audit — see git history for the original pre-implementation version.
 
 Implementation-level companion to `MessOS_PRD.md` sections 6 (Data Model) and 7 (API
@@ -76,6 +76,8 @@ object Meals : UUIDTable("meals") {
 
 ### 1.5 Expenses
 ```kotlin
+enum class ExpenseCategory { BAZAAR, UTILITY }
+
 object Expenses : UUIDTable("expenses") {
     val messId = reference("mess_id", Messes, onDelete = ReferenceOption.CASCADE)
     val amount = decimal("amount", 10, 2)
@@ -84,9 +86,13 @@ object Expenses : UUIDTable("expenses") {
     val receiptPhotoUrl = varchar("receipt_photo_url", 500).nullable()
     val loggedBy = reference("logged_by", Users)
     val cycleId = reference("cycle_id", MonthlyCycles) // see 1.7
+    val category = enumerationByName<ExpenseCategory>("category", 10).default(ExpenseCategory.BAZAAR)
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
 }
 ```
+
+`ExpenseCategory` is defined in `util/DuesCalculator.kt` (no DB imports) and referenced
+by `Expenses.kt` — this keeps `DuesCalculator` free of DB-layer dependencies.
 
 ### 1.6 Deposits
 ```kotlin
@@ -271,10 +277,16 @@ Notes:
 
 ### 2.4 Expenses & Deposits
 
-**POST /expenses** *(requires JWT with messId claim)*
+**POST /expenses** *(requires JWT with messId claim; caller must be MANAGER)*
 ```json
-// Request
-{ "amount": 1120.00, "date": "2026-07-02", "note": "Rice, dal, veg", "receiptPhotoUrl": null }
+// Request — category defaults to "BAZAAR" if omitted (backward-compatible)
+{
+  "amount": 1120.00,
+  "date": "2026-07-02",
+  "note": "Rice, dal, veg",
+  "receiptPhotoUrl": null,
+  "category": "BAZAAR"
+}
 // Response
 {
   "id": "uuid",
@@ -284,9 +296,13 @@ Notes:
   "receiptPhotoUrl": null,
   "loggedBy": "uuid",
   "loggedByName": "string",
+  "category": "BAZAAR",
   "createdAt": "iso-8601"
 }
 ```
+
+`category` must be one of `"BAZAAR"` or `"UTILITY"`. Case-insensitive on input;
+always returned as uppercase. A `VALIDATION_ERROR` is returned for any other value.
 
 **GET /expenses** *(requires JWT with messId claim)*
 ```json
@@ -300,6 +316,7 @@ Notes:
     "receiptPhotoUrl": null,
     "loggedBy": "uuid",
     "loggedByName": "string",
+    "category": "BAZAAR",
     "createdAt": "iso-8601"
   }
 ]
@@ -360,19 +377,31 @@ Notes:
   "cycleStartDate": "2026-07-01",
   "mealRate": 80.00,
   "totalMeals": 320.0,
-  "totalExpenses": 25600.00,
+  "totalExpenses": 26600.00,
+  "totalUtilityExpense": 1000.00,
   "balances": [
     {
       "memberId": "uuid",
       "memberName": "string",
       "totalMeals": 58.0,
       "mealCost": 4640.00,
+      "utilityShare": 250.00,
       "totalDeposited": 3400.00,
-      "balance": -1240.00   // negative = owes, positive = owed back
+      "balance": -1490.00   // negative = owes, positive = owed back
     }
   ]
 }
 ```
+
+**Dues calculation formula (as of V12):**
+- `mealRate` = `totalBazaarExpense / totalMeals` (utility expenses excluded from meal rate)
+- `utilityShare` per member = `totalUtilityExpense / activeMemberCount` (split equally)
+- `activeMemberCount` = all current mess members (including members with no meals/deposits)
+- `balance` = `totalDeposited − mealCost − utilityShare`
+- `totalExpenses` = `totalBazaarExpense + totalUtilityExpense` (full cycle spend)
+
+Members who joined mid-cycle with no meals or deposits still appear in balances with
+`mealCost = 0` and a negative balance equal to their `utilityShare`.
 
 **POST /cycle/close** *(requires JWT with messId claim; caller must be MANAGER)*
 ```json
@@ -520,7 +549,7 @@ relevant REST endpoint on receipt rather than using the WebSocket payload direct
 |---|---|---|
 | `MEAL_UPDATED` | Any meal entry created or edited | `mealId` |
 | `MEAL_DELETED` | A meal entry is deleted | `mealId` |
-| `EXPENSE_ADDED` | New bazaar expense logged | `expenseId` |
+| `EXPENSE_ADDED` | New expense logged (BAZAAR or UTILITY) | `expenseId` |
 | `EXPENSE_DELETED` | An expense is deleted | `expenseId` |
 | `DEPOSIT_ADDED` | New deposit logged | `depositId` |
 | `DEPOSIT_DELETED` | A deposit is deleted | `depositId` |
@@ -571,12 +600,12 @@ messos-backend/
 │       ├── JwtUtils.kt             // generateToken(userId, messId?, role?)
 │       ├── PasswordUtils.kt
 │       └── WebSocketManager.kt     // ConcurrentHashMap<messId, Set<session>>
-└── src/test/kotlin/...             // unit tests (DuesCalculatorTest has 10 cases)
+└── src/test/kotlin/...             // unit tests (DuesCalculatorTest has 13 cases)
 ```
 
 **Why `DuesCalculator` is called out specifically:** this is the single most
 important piece of logic in the entire app — get it wrong and the whole product's
 trust proposition breaks. It should be a pure function (inputs: meals + expenses +
-deposits → output: per-member balances) with no database or HTTP dependencies, so
-it's trivially unit-testable in isolation. Write tests for it before wiring it into
-any route.
+deposits + allMemberUserIds → output: per-member balances) with no database or HTTP
+dependencies, so it's trivially unit-testable in isolation. Write tests for it before
+wiring it into any route.

@@ -2,6 +2,8 @@ package com.prosenjith.messos.util
 
 import java.util.UUID
 
+enum class ExpenseCategory { BAZAAR, UTILITY }
+
 data class MealEntry(
     val memberUserId: UUID,
     val breakfastCount: Double,
@@ -9,7 +11,10 @@ data class MealEntry(
     val dinnerCount: Double
 )
 
-data class ExpenseEntry(val amount: Double)
+data class ExpenseEntry(
+    val amount: Double,
+    val category: ExpenseCategory = ExpenseCategory.BAZAAR
+)
 
 data class DepositEntry(val memberUserId: UUID, val amount: Double)
 
@@ -17,6 +22,7 @@ data class MemberBalance(
     val memberUserId: UUID,
     val totalMeals: Double,
     val mealCost: Double,
+    val utilityShare: Double,
     val totalDeposited: Double,
     val balance: Double
 )
@@ -24,6 +30,7 @@ data class MemberBalance(
 data class DuesResult(
     val mealRate: Double,
     val totalExpenses: Double,
+    val totalUtilityExpense: Double,
     val totalMeals: Double,
     val balances: List<MemberBalance>
 )
@@ -33,13 +40,21 @@ object DuesCalculator {
     fun calculate(
         meals: List<MealEntry>,
         expenses: List<ExpenseEntry>,
-        deposits: List<DepositEntry>
+        deposits: List<DepositEntry>,
+        allMemberUserIds: List<UUID> = emptyList()
     ): DuesResult {
-        val totalExpenses = expenses.sumOf { it.amount }
-        val totalMeals = meals.sumOf { it.breakfastCount + it.lunchCount + it.dinnerCount }
-        val mealRate = if (totalMeals == 0.0) 0.0 else totalExpenses / totalMeals
+        val totalBazaarExpense = expenses.filter { it.category == ExpenseCategory.BAZAAR }.sumOf { it.amount }
+        val totalUtilityExpense = expenses.filter { it.category == ExpenseCategory.UTILITY }.sumOf { it.amount }
+        val totalExpenses = totalBazaarExpense + totalUtilityExpense
 
-        val allMemberIds = (meals.map { it.memberUserId } + deposits.map { it.memberUserId }).distinct()
+        val totalMeals = meals.sumOf { it.breakfastCount + it.lunchCount + it.dinnerCount }
+        val mealRate = if (totalMeals == 0.0) 0.0 else totalBazaarExpense / totalMeals
+
+        val allMemberIds = (allMemberUserIds +
+            meals.map { it.memberUserId } +
+            deposits.map { it.memberUserId }).distinct()
+        val activeMemberCount = allMemberIds.size
+        val utilityShare = if (activeMemberCount == 0) 0.0 else totalUtilityExpense / activeMemberCount
 
         val mealsByMember = meals.groupBy { it.memberUserId }
         val depositsByMember = deposits.groupBy { it.memberUserId }
@@ -53,14 +68,16 @@ object DuesCalculator {
                 memberUserId = memberId,
                 totalMeals = memberMeals,
                 mealCost = mealCost,
+                utilityShare = utilityShare,
                 totalDeposited = memberDeposits,
-                balance = memberDeposits - mealCost
+                balance = memberDeposits - mealCost - utilityShare
             )
         }
 
         return DuesResult(
             mealRate = mealRate,
             totalExpenses = totalExpenses,
+            totalUtilityExpense = totalUtilityExpense,
             totalMeals = totalMeals,
             balances = balances
         )

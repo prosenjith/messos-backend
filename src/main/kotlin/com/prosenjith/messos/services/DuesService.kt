@@ -23,6 +23,7 @@ data class MemberBalanceRecord(
     val memberName: String,
     val totalMeals: Double,
     val mealCost: Double,
+    val utilityShare: Double,
     val totalDeposited: Double,
     val balance: Double
 )
@@ -32,6 +33,7 @@ data class DuesRecord(
     val cycleStartDate: String,
     val mealRate: Double,
     val totalExpenses: Double,
+    val totalUtilityExpense: Double,
     val totalMeals: Double,
     val balances: List<MemberBalanceRecord>
 )
@@ -68,7 +70,10 @@ class DuesService {
 
             val expenses = Expenses.selectAll()
                 .where { (Expenses.messId eq messId) and (Expenses.cycleId eq cycleId) }
-                .map { row -> ExpenseEntry(amount = row[Expenses.amount].toDouble()) }
+                .map { row -> ExpenseEntry(
+                    amount   = row[Expenses.amount].toDouble(),
+                    category = row[Expenses.category]
+                ) }
 
             val deposits = Deposits.selectAll()
                 .where { (Deposits.messId eq messId) and (Deposits.cycleId eq cycleId) }
@@ -77,13 +82,15 @@ class DuesService {
                     DepositEntry(memberUserId = userId, amount = row[Deposits.amount].toDouble())
                 }
 
-            val result = DuesCalculator.calculate(meals, expenses, deposits)
+            val allMemberUserIds = memberMap.values.map { it.first }
+            val result = DuesCalculator.calculate(meals, expenses, deposits, allMemberUserIds)
 
             DuesRecord(
                 cycleId = cycleId,
                 cycleStartDate = cycleStartDate.toString(),
                 mealRate = result.mealRate,
                 totalExpenses = result.totalExpenses,
+                totalUtilityExpense = result.totalUtilityExpense,
                 totalMeals = result.totalMeals,
                 balances = result.balances.map { b ->
                     MemberBalanceRecord(
@@ -91,6 +98,7 @@ class DuesService {
                         memberName = nameByUserId[b.memberUserId] ?: "Unknown",
                         totalMeals = b.totalMeals,
                         mealCost = b.mealCost,
+                        utilityShare = b.utilityShare,
                         totalDeposited = b.totalDeposited,
                         balance = b.balance
                     )

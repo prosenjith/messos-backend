@@ -102,7 +102,10 @@ class CycleService {
 
             val expenses = Expenses.selectAll()
                 .where { (Expenses.messId eq messId) and (Expenses.cycleId eq cycleId) }
-                .map { row -> ExpenseEntry(amount = row[Expenses.amount].toDouble()) }
+                .map { row -> ExpenseEntry(
+                    amount   = row[Expenses.amount].toDouble(),
+                    category = row[Expenses.category]
+                ) }
 
             val deposits = Deposits.selectAll()
                 .where { (Deposits.messId eq messId) and (Deposits.cycleId eq cycleId) }
@@ -111,7 +114,8 @@ class CycleService {
                     DepositEntry(memberUserId = userId, amount = row[Deposits.amount].toDouble())
                 }
 
-            val result = DuesCalculator.calculate(meals, expenses, deposits)
+            val allMemberUserIds = memberDataByUserId.keys.toList()
+            val result = DuesCalculator.calculate(meals, expenses, deposits, allMemberUserIds)
 
             val today = Clock.System.todayIn(TimeZone.UTC)
             val closedAt = Clock.System.now()

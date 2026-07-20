@@ -2,6 +2,7 @@ package com.prosenjith.messos
 
 import com.prosenjith.messos.util.DepositEntry
 import com.prosenjith.messos.util.DuesCalculator
+import com.prosenjith.messos.util.ExpenseCategory
 import com.prosenjith.messos.util.ExpenseEntry
 import com.prosenjith.messos.util.MealEntry
 import java.util.UUID
@@ -11,8 +12,9 @@ import kotlin.test.assertTrue
 
 class DuesCalculatorTest {
 
-    private val alice = UUID.fromString("00000000-0000-0000-0000-000000000001")
-    private val bob   = UUID.fromString("00000000-0000-0000-0000-000000000002")
+    private val alice   = UUID.fromString("00000000-0000-0000-0000-000000000001")
+    private val bob     = UUID.fromString("00000000-0000-0000-0000-000000000002")
+    private val charlie = UUID.fromString("00000000-0000-0000-0000-000000000003")
 
     @Test
     fun `balanced cycle - each member owes exactly what they deposited`() {
@@ -198,5 +200,105 @@ class DuesCalculatorTest {
         assertEquals(0.5,  b.totalMeals)
         assertEquals(50.0, b.mealCost)
         assertEquals(0.0,  b.balance)
+    }
+
+    // --- Utility expense tests ---
+
+    @Test
+    fun `zero utility expense matches old bazaar-only behavior`() {
+        // Regression: BAZAAR expenses only — result must be identical to pre-category formula
+        val meals = listOf(
+            MealEntry(alice, 1.0, 1.0, 1.0), // 3 meals
+            MealEntry(bob,   1.0, 1.0, 0.0), // 2 meals
+        )
+        val expenses = listOf(ExpenseEntry(500.0, ExpenseCategory.BAZAAR))
+        val deposits = listOf(DepositEntry(alice, 300.0), DepositEntry(bob, 200.0))
+
+        val result = DuesCalculator.calculate(meals, expenses, deposits, listOf(alice, bob))
+
+        assertEquals(100.0, result.mealRate)
+        assertEquals(500.0, result.totalExpenses)
+        assertEquals(0.0,   result.totalUtilityExpense)
+        assertEquals(5.0,   result.totalMeals)
+
+        val a = result.balances.first { it.memberUserId == alice }
+        assertEquals(300.0, a.mealCost)
+        assertEquals(0.0,   a.utilityShare)
+        assertEquals(300.0, a.totalDeposited)
+        assertEquals(0.0,   a.balance)
+
+        val b = result.balances.first { it.memberUserId == bob }
+        assertEquals(200.0, b.mealCost)
+        assertEquals(0.0,   b.utilityShare)
+        assertEquals(200.0, b.totalDeposited)
+        assertEquals(0.0,   b.balance)
+    }
+
+    @Test
+    fun `utility expense split equally with uneven member count`() {
+        // 3 members, 100 utility → each owes 33.333... (Double precision, not rounded)
+        val expenses = listOf(ExpenseEntry(100.0, ExpenseCategory.UTILITY))
+
+        val result = DuesCalculator.calculate(
+            meals    = emptyList(),
+            expenses = expenses,
+            deposits = emptyList(),
+            allMemberUserIds = listOf(alice, bob, charlie)
+        )
+
+        assertEquals(0.0,         result.mealRate)
+        assertEquals(0.0,         result.totalMeals)
+        assertEquals(100.0,       result.totalExpenses)
+        assertEquals(100.0,       result.totalUtilityExpense)
+        assertEquals(3,           result.balances.size)
+
+        val expectedShare = 100.0 / 3
+        result.balances.forEach { member ->
+            assertEquals(0.0,           member.mealCost)
+            assertEquals(expectedShare,  member.utilityShare)
+            assertEquals(0.0,           member.totalDeposited)
+            assertEquals(-expectedShare, member.balance)
+        }
+    }
+
+    @Test
+    fun `utility expense charged to all members including one who joined mid-cycle with no meals or deposits`() {
+        // alice and bob have meals/deposits; charlie joined mid-cycle with neither
+        val meals = listOf(
+            MealEntry(alice, 1.0, 1.0, 1.0), // 3 meals
+            MealEntry(bob,   1.0, 1.0, 0.0), // 2 meals
+        )
+        val expenses = listOf(
+            ExpenseEntry(500.0, ExpenseCategory.BAZAAR),
+            ExpenseEntry(90.0,  ExpenseCategory.UTILITY)
+        )
+        val deposits = listOf(DepositEntry(alice, 300.0), DepositEntry(bob, 200.0))
+
+        val result = DuesCalculator.calculate(meals, expenses, deposits, listOf(alice, bob, charlie))
+
+        assertEquals(100.0, result.mealRate)        // 500 / 5 meals
+        assertEquals(90.0,  result.totalUtilityExpense)
+        assertEquals(590.0, result.totalExpenses)
+        assertEquals(3,     result.balances.size)
+
+        val utilityShare = 90.0 / 3   // = 30.0
+
+        val a = result.balances.first { it.memberUserId == alice }
+        assertEquals(300.0,       a.mealCost)
+        assertEquals(utilityShare, a.utilityShare)
+        assertEquals(300.0,       a.totalDeposited)
+        assertEquals(-30.0,       a.balance)   // 300 - 300 - 30
+
+        val b = result.balances.first { it.memberUserId == bob }
+        assertEquals(200.0,       b.mealCost)
+        assertEquals(utilityShare, b.utilityShare)
+        assertEquals(200.0,       b.totalDeposited)
+        assertEquals(-30.0,       b.balance)   // 200 - 200 - 30
+
+        val c = result.balances.first { it.memberUserId == charlie }
+        assertEquals(0.0,         c.mealCost)
+        assertEquals(utilityShare, c.utilityShare)
+        assertEquals(0.0,         c.totalDeposited)
+        assertEquals(-30.0,       c.balance)   // 0 - 0 - 30
     }
 }
