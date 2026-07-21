@@ -40,3 +40,12 @@ data class CycleHistoryItem(
     val closedAt: String,
     val balances: List<CycleMemberSummary>
 )
+
+@Serializable
+data class CycleHistoryPageResponse(
+    val items: List<CycleHistoryItem>,
+    val page: Int,
+    val size: Int,
+    val total: Long,
+    val hasMore: Boolean
+)

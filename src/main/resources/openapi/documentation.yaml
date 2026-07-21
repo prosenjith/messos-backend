@@ -1002,12 +1002,21 @@ paths:
     get:
       tags: [Cycle]
       summary: Get closed cycle history
-      description: Returns all closed cycles with per-member summaries, newest first.
+      description: Returns closed cycles for the mess, newest first. Paginated with page (0-indexed, default 0) and size (default 12, max 50).
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: {type: integer, default: 0, minimum: 0}
+          description: Page index (0-indexed)
+        - in: query
+          name: size
+          schema: {type: integer, default: 12, minimum: 1, maximum: 50}
+          description: Number of cycles per page
       responses:
         "200":
-          description: Cycle history list
+          description: Paginated cycle history
           content:
             application/json:
               schema:
@@ -1016,22 +1025,29 @@ paths:
                 properties:
                   success: {type: boolean, example: true}
                   data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        cycleId: {type: string, format: uuid}
-                        startDate: {type: string, format: date}
-                        endDate: {type: string, format: date}
-                        mealRate: {type: number}
-                        totalExpenses: {type: number}
-                        totalUtilityExpense: {type: number}
-                        totalMeals: {type: number}
-                        closedAt: {type: string, format: date-time}
-                        balances:
-                          type: array
-                          items:
-                            $ref: "#/components/schemas/CycleMemberSummary"
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            cycleId: {type: string, format: uuid}
+                            startDate: {type: string, format: date}
+                            endDate: {type: string, format: date}
+                            mealRate: {type: number}
+                            totalExpenses: {type: number}
+                            totalUtilityExpense: {type: number}
+                            totalMeals: {type: number}
+                            closedAt: {type: string, format: date-time}
+                            balances:
+                              type: array
+                              items:
+                                $ref: "#/components/schemas/CycleMemberSummary"
+                      page: {type: integer, example: 0}
+                      size: {type: integer, example: 12}
+                      total: {type: integer, example: 35}
+                      hasMore: {type: boolean, example: true}
         "403":
           description: Must join a mess first
           content:

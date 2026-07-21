@@ -3,8 +3,10 @@ package com.prosenjith.messos.routes
 import com.prosenjith.messos.models.ApiSuccess
 import com.prosenjith.messos.models.cycle.CycleCloseResponse
 import com.prosenjith.messos.models.cycle.CycleHistoryItem
+import com.prosenjith.messos.models.cycle.CycleHistoryPageResponse
 import com.prosenjith.messos.models.cycle.CycleMemberSummary
 import com.prosenjith.messos.services.CycleCloseRecord
+import com.prosenjith.messos.services.CycleHistoryPage
 import com.prosenjith.messos.services.CycleHistoryRecord
 import com.prosenjith.messos.services.CycleMemberSummaryRecord
 import com.prosenjith.messos.services.CycleService
@@ -42,8 +44,10 @@ fun Route.cycleRoutes(cycleService: CycleService) {
                     ?.let { UUID.fromString(it) }
                     ?: throw ForbiddenException("You must join a mess before viewing cycle history")
 
-                val history = cycleService.getCycleHistory(messId)
-                call.respond(ApiSuccess(data = history.map { it.toResponse() }))
+                val page = (call.request.queryParameters["page"]?.toIntOrNull() ?: 0).coerceAtLeast(0)
+                val size = (call.request.queryParameters["size"]?.toIntOrNull() ?: 12).coerceIn(1, 50)
+                val result = cycleService.getCycleHistory(messId, page, size)
+                call.respond(ApiSuccess(data = result.toResponse()))
             }
         }
     }
@@ -83,4 +87,12 @@ private fun CycleHistoryRecord.toResponse() = CycleHistoryItem(
     totalMeals          = totalMeals,
     closedAt            = closedAt,
     balances            = balances.map { it.toResponse() }
+)
+
+private fun CycleHistoryPage.toResponse() = CycleHistoryPageResponse(
+    items   = items.map { it.toResponse() },
+    page    = page,
+    size    = size,
+    total   = total,
+    hasMore = hasMore
 )

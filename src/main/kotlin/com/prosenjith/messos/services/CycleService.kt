@@ -65,6 +65,14 @@ data class CycleHistoryRecord(
     val balances: List<CycleMemberSummaryRecord>
 )
 
+data class CycleHistoryPage(
+    val items: List<CycleHistoryRecord>,
+    val page: Int,
+    val size: Int,
+    val total: Long,
+    val hasMore: Boolean
+)
+
 class CycleService {
 
     suspend fun closeCycle(callerUserId: UUID, messId: UUID): CycleCloseRecord =
@@ -186,11 +194,15 @@ class CycleService {
             )
         }
 
-    suspend fun getCycleHistory(messId: UUID): List<CycleHistoryRecord> =
+    suspend fun getCycleHistory(messId: UUID, page: Int, size: Int): CycleHistoryPage =
         newSuspendedTransaction(Dispatchers.IO) {
-            val closedCycles = MonthlyCycles.selectAll()
+            val baseQuery = MonthlyCycles.selectAll()
                 .where { (MonthlyCycles.messId eq messId) and (MonthlyCycles.status eq CycleStatus.CLOSED) }
+            val total = baseQuery.count()
+            val closedCycles = baseQuery
                 .orderBy(MonthlyCycles.startDate, SortOrder.DESC)
+                .limit(size)
+                .offset(page.toLong() * size.toLong())
                 .toList()
 
             // messMemberId → userId
@@ -198,7 +210,7 @@ class CycleService {
                 .where { MessMembers.messId eq messId }
                 .associate { it[MessMembers.id].value to it[MessMembers.userId].value }
 
-            closedCycles.map { cycleRow ->
+            val items = closedCycles.map { cycleRow ->
                 val cycleId = cycleRow[MonthlyCycles.id].value
 
                 val balances = CycleSummaries.selectAll()
@@ -228,5 +240,13 @@ class CycleService {
                     balances            = balances
                 )
             }
+
+            CycleHistoryPage(
+                items   = items,
+                page    = page,
+                size    = size,
+                total   = total,
+                hasMore = (page + 1).toLong() * size < total
+            )
         }
 }
