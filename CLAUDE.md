@@ -77,7 +77,14 @@ There is no lint step configured. There is no way to run a single test class in 
 
 **Standard error codes** (defined in spec, implement in StatusPages + routes): `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_ERROR` 400, `INVALID_JOIN_CODE` 400, `DUPLICATE_ENTRY` 409, `CYCLE_ALREADY_CLOSED` 400, `INTERNAL_ERROR` 500.
 
-**Cycle summaries (step 8):** `cycle_summaries` table (V9) persists per-member balances at cycle-close time. `POST /cycle/close` atomically: runs DuesCalculator, inserts rows into `cycle_summaries` (stores `member_name` for historical immutability), updates `monthly_cycles` (status=CLOSED, endDate=today, mealRateSnapshot, closedAt), and inserts a new OPEN cycle starting the next day. `GET /cycle/history` reads closed cycles + their summaries ordered newest-first.
+**Cycle summaries (step 8):** `cycle_summaries` table (V9) persists per-member balances at cycle-close time. `POST /cycle/close` atomically: runs DuesCalculator, inserts rows into `cycle_summaries` (stores `member_name` for historical immutability), updates `monthly_cycles` (status=CLOSED, endDate=today, mealRateSnapshot, totalExpenses, totalUtilityExpense, totalMeals, closedAt), and inserts a new OPEN cycle starting the next day. V13 migration added `utility_share` to `cycle_summaries` and the three total columns to `monthly_cycles` so history records are complete snapshots.
+
+**Pagination pattern:** `GET /cycle/history` is the only paginated endpoint. Pattern to follow if adding more:
+- Query params: `page` (0-indexed, default 0, `coerceAtLeast(0)`) and `size` (default 12, `coerceIn(1, 50)`). Parse in the route, never in the service.
+- Service returns a `XxxPage` data class: `items`, `page`, `size`, `total: Long`, `hasMore: Boolean`. Compute `hasMore = (page + 1).toLong() * size < total`.
+- Exposed query: run a `.count()` on the base query first, then chain `.limit(size).offset(page.toLong() * size.toLong())` — do NOT use the deprecated two-arg `limit(n, offset)` form (removed in Exposed 0.61.0+).
+- DTO: a `XxxPageResponse` wrapper mirrors the service `XxxPage` shape with `items: List<XxxItem>`.
+- Response: `ApiSuccess(data = result.toResponse())` — the page envelope is the `data` value, not a bare array.
 
 **Image upload patterns (step 11):**
 - Two endpoints: `POST /api/v1/upload` (generic, stores under `public/receipts/<uuid>.<ext>`) and `PUT /api/v1/auth/me/avatar` (uploads + updates `users.profile_image_url`, stores under `public/avatars/<uuid>.<ext>`). Both require JWT auth.
