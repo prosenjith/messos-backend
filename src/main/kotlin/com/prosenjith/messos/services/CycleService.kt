@@ -34,6 +34,7 @@ data class CycleMemberSummaryRecord(
     val memberName: String,
     val totalMeals: Double,
     val mealCost: Double,
+    val utilityShare: Double,
     val totalDeposited: Double,
     val balance: Double
 )
@@ -44,6 +45,7 @@ data class CycleCloseRecord(
     val endDate: String,
     val mealRate: Double,
     val totalExpenses: Double,
+    val totalUtilityExpense: Double,
     val totalMeals: Double,
     val closedAt: String,
     val balances: List<CycleMemberSummaryRecord>,
@@ -56,6 +58,9 @@ data class CycleHistoryRecord(
     val startDate: String,
     val endDate: String,
     val mealRate: Double,
+    val totalExpenses: Double,
+    val totalUtilityExpense: Double,
+    val totalMeals: Double,
     val closedAt: String,
     val balances: List<CycleMemberSummaryRecord>
 )
@@ -129,6 +134,7 @@ class CycleService {
                     it[CycleSummaries.memberName]      = memberName
                     it[CycleSummaries.totalMeals]      = balance.totalMeals.toBigDecimal()
                     it[CycleSummaries.mealCost]        = balance.mealCost.toBigDecimal()
+                    it[CycleSummaries.utilityShare]    = balance.utilityShare.toBigDecimal()
                     it[CycleSummaries.totalDeposited]  = balance.totalDeposited.toBigDecimal()
                     it[CycleSummaries.balance]         = balance.balance.toBigDecimal()
                 }
@@ -139,6 +145,9 @@ class CycleService {
                 it[MonthlyCycles.status]             = CycleStatus.CLOSED
                 it[MonthlyCycles.endDate]            = today
                 it[MonthlyCycles.mealRateSnapshot]   = result.mealRate.toBigDecimal()
+                it[MonthlyCycles.totalExpenses]      = result.totalExpenses.toBigDecimal()
+                it[MonthlyCycles.totalUtilityExpense] = result.totalUtilityExpense.toBigDecimal()
+                it[MonthlyCycles.totalMeals]         = result.totalMeals.toBigDecimal()
                 it[MonthlyCycles.closedAt]           = closedAt
             }
 
@@ -153,19 +162,21 @@ class CycleService {
 
             val nameByUserId = memberDataByUserId.mapValues { it.value.second }
             CycleCloseRecord(
-                cycleId        = cycleId,
-                startDate      = cycleStartDate.toString(),
-                endDate        = today.toString(),
-                mealRate       = result.mealRate,
-                totalExpenses  = result.totalExpenses,
-                totalMeals     = result.totalMeals,
-                closedAt       = closedAt.toString(),
-                balances       = result.balances.map { b ->
+                cycleId             = cycleId,
+                startDate           = cycleStartDate.toString(),
+                endDate             = today.toString(),
+                mealRate            = result.mealRate,
+                totalExpenses       = result.totalExpenses,
+                totalUtilityExpense = result.totalUtilityExpense,
+                totalMeals          = result.totalMeals,
+                closedAt            = closedAt.toString(),
+                balances            = result.balances.map { b ->
                     CycleMemberSummaryRecord(
                         memberUserId   = b.memberUserId,
                         memberName     = nameByUserId[b.memberUserId] ?: "Unknown",
                         totalMeals     = b.totalMeals,
                         mealCost       = b.mealCost,
+                        utilityShare   = b.utilityShare,
                         totalDeposited = b.totalDeposited,
                         balance        = b.balance
                     )
@@ -199,18 +210,22 @@ class CycleService {
                             memberName     = row[CycleSummaries.memberName],
                             totalMeals     = row[CycleSummaries.totalMeals].toDouble(),
                             mealCost       = row[CycleSummaries.mealCost].toDouble(),
+                            utilityShare   = row[CycleSummaries.utilityShare].toDouble(),
                             totalDeposited = row[CycleSummaries.totalDeposited].toDouble(),
                             balance        = row[CycleSummaries.balance].toDouble()
                         )
                     }
 
                 CycleHistoryRecord(
-                    cycleId   = cycleId,
-                    startDate = cycleRow[MonthlyCycles.startDate].toString(),
-                    endDate   = cycleRow[MonthlyCycles.endDate].toString(),
-                    mealRate  = cycleRow[MonthlyCycles.mealRateSnapshot]?.toDouble() ?: 0.0,
-                    closedAt  = cycleRow[MonthlyCycles.closedAt].toString(),
-                    balances  = balances
+                    cycleId             = cycleId,
+                    startDate           = cycleRow[MonthlyCycles.startDate].toString(),
+                    endDate             = cycleRow[MonthlyCycles.endDate].toString(),
+                    mealRate            = cycleRow[MonthlyCycles.mealRateSnapshot]?.toDouble() ?: 0.0,
+                    totalExpenses       = cycleRow[MonthlyCycles.totalExpenses]?.toDouble() ?: 0.0,
+                    totalUtilityExpense = cycleRow[MonthlyCycles.totalUtilityExpense]?.toDouble() ?: 0.0,
+                    totalMeals          = cycleRow[MonthlyCycles.totalMeals]?.toDouble() ?: 0.0,
+                    closedAt            = cycleRow[MonthlyCycles.closedAt].toString(),
+                    balances            = balances
                 )
             }
         }

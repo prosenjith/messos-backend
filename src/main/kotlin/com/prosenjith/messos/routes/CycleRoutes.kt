@@ -54,28 +54,33 @@ private fun CycleMemberSummaryRecord.toResponse() = CycleMemberSummary(
     memberName     = memberName,
     totalMeals     = totalMeals,
     mealCost       = mealCost,
+    utilityShare   = utilityShare,
     totalDeposited = totalDeposited,
     balance        = balance
 )
 
 private fun CycleCloseRecord.toResponse() = CycleCloseResponse(
-    cycleId           = cycleId.toString(),
-    startDate         = startDate,
-    endDate           = endDate,
-    mealRate          = mealRate,
-    totalExpenses     = totalExpenses,
-    totalMeals        = totalMeals,
-    closedAt          = closedAt,
-    balances          = balances.map { it.toResponse() },
-    newCycleId        = newCycleId.toString(),
-    newCycleStartDate = newCycleStartDate
+    cycleId             = cycleId.toString(),
+    startDate           = startDate,
+    endDate             = endDate,
+    mealRate            = mealRate,
+    totalExpenses       = totalExpenses,
+    totalUtilityExpense = totalUtilityExpense,
+    totalMeals          = totalMeals,
+    closedAt            = closedAt,
+    balances            = balances.map { it.toResponse() },
+    newCycleId          = newCycleId.toString(),
+    newCycleStartDate   = newCycleStartDate
 )
 
 private fun CycleHistoryRecord.toResponse() = CycleHistoryItem(
-    cycleId   = cycleId.toString(),
-    startDate = startDate,
-    endDate   = endDate,
-    mealRate  = mealRate,
-    closedAt  = closedAt,
-    balances  = balances.map { it.toResponse() }
+    cycleId             = cycleId.toString(),
+    startDate           = startDate,
+    endDate             = endDate,
+    mealRate            = mealRate,
+    totalExpenses       = totalExpenses,
+    totalUtilityExpense = totalUtilityExpense,
+    totalMeals          = totalMeals,
+    closedAt            = closedAt,
+    balances            = balances.map { it.toResponse() }
 )

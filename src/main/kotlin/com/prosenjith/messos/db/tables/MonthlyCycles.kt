@@ -12,6 +12,9 @@ object MonthlyCycles : UUIDTable("monthly_cycles") {
     val startDate = date("start_date")
     val endDate = date("end_date").nullable()
     val status = enumerationByName("status", 10, CycleStatus::class).default(CycleStatus.OPEN)
-    val mealRateSnapshot = decimal("meal_rate_snapshot", 10, 2).nullable()
+    val mealRateSnapshot    = decimal("meal_rate_snapshot", 10, 2).nullable()
+    val totalExpenses       = decimal("total_expenses", 10, 2).nullable()
+    val totalUtilityExpense = decimal("total_utility_expense", 10, 2).nullable()
+    val totalMeals          = decimal("total_meals", 8, 2).nullable()
     val closedAt = timestamp("closed_at").nullable()
 }

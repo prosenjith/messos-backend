@@ -9,6 +9,7 @@ object CycleSummaries : UUIDTable("cycle_summaries") {
     val memberName  = varchar("member_name", 100)
     val totalMeals  = decimal("total_meals",  8, 2)
     val mealCost    = decimal("meal_cost",    10, 2)
+    val utilityShare = decimal("utility_share", 10, 2)
     val totalDeposited = decimal("total_deposited", 10, 2)
     val balance     = decimal("balance", 10, 2)
 }

@@ -8,6 +8,7 @@ data class CycleMemberSummary(
     val memberName: String,
     val totalMeals: Double,
     val mealCost: Double,
+    val utilityShare: Double,
     val totalDeposited: Double,
     val balance: Double
 )
@@ -19,6 +20,7 @@ data class CycleCloseResponse(
     val endDate: String,
     val mealRate: Double,
     val totalExpenses: Double,
+    val totalUtilityExpense: Double,
     val totalMeals: Double,
     val closedAt: String,
     val balances: List<CycleMemberSummary>,
@@ -32,6 +34,9 @@ data class CycleHistoryItem(
     val startDate: String,
     val endDate: String,
     val mealRate: Double,
+    val totalExpenses: Double,
+    val totalUtilityExpense: Double,
+    val totalMeals: Double,
     val closedAt: String,
     val balances: List<CycleMemberSummary>
 )
