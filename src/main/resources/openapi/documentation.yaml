@@ -140,8 +140,9 @@ components:
         memberName: {type: string, example: "Rahim Khan"}
         totalMeals: {type: number, example: 45.5}
         mealCost: {type: number, example: 1820.00}
+        utilityShare: {type: number, example: 250.00}
         totalDeposited: {type: number, example: 2000.00}
-        balance: {type: number, example: 180.00}
+        balance: {type: number, example: -70.00}
 
     NoticeObject:
       type: object
@@ -975,6 +976,7 @@ paths:
                       endDate: {type: string, format: date}
                       mealRate: {type: number}
                       totalExpenses: {type: number}
+                      totalUtilityExpense: {type: number}
                       totalMeals: {type: number}
                       closedAt: {type: string, format: date-time}
                       balances:
@@ -1022,6 +1024,9 @@ paths:
                         startDate: {type: string, format: date}
                         endDate: {type: string, format: date}
                         mealRate: {type: number}
+                        totalExpenses: {type: number}
+                        totalUtilityExpense: {type: number}
+                        totalMeals: {type: number}
                         closedAt: {type: string, format: date-time}
                         balances:
                           type: array
