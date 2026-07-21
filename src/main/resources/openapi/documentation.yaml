@@ -4,6 +4,8 @@ info:
   description: "Backend API for the MessOS mess management application"
   version: "1.0.0"
 servers:
+  - url: "https://messos-api-production.up.railway.app"
+    description: "Production"
   - url: "http://localhost:8080"
     description: "Local development"
 
@@ -45,11 +47,25 @@ components:
           example: true
         data:
           type: object
-          required: [token]
+          required: [userId, token, refreshToken]
           properties:
+            userId:
+              type: string
+              format: uuid
             token:
               type: string
               example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            refreshToken:
+              type: string
+              example: "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."
+            messId:
+              type: string
+              format: uuid
+              nullable: true
+            role:
+              type: string
+              enum: [MANAGER, MEMBER]
+              nullable: true
 
     UserResponse:
       type: object
@@ -71,6 +87,70 @@ components:
             phoneOrEmail:
               type: string
               example: "rahim@example.com"
+            profileImageUrl:
+              type: string
+              nullable: true
+              example: "https://messos-uploads.s3.ap-south-1.amazonaws.com/public/avatars/uuid.jpg"
+
+    ExpenseObject:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        amount: {type: number}
+        date: {type: string, format: date}
+        note: {type: string, nullable: true}
+        receiptPhotoUrl: {type: string, nullable: true}
+        category:
+          type: string
+          enum: [BAZAAR, UTILITY]
+          example: "BAZAAR"
+        loggedBy: {type: string, format: uuid}
+        loggedByName: {type: string}
+        createdAt: {type: string, format: date-time}
+
+    WsEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "MEAL_UPDATED"
+          description: "One of: MEAL_UPDATED, MEAL_DELETED, EXPENSE_ADDED, EXPENSE_DELETED, DEPOSIT_ADDED, DEPOSIT_DELETED, CYCLE_CLOSED, NOTICE_POSTED, NOTICE_DELETED"
+        data:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            mealId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    MemberBalanceResponse:
+      type: object
+      properties:
+        memberId: {type: string, format: uuid}
+        memberName: {type: string, example: "Rahim Khan"}
+        totalMeals: {type: number, example: 45.5}
+        mealCost: {type: number, example: 1820.00}
+        utilityShare: {type: number, example: 250.00}
+        totalDeposited: {type: number, example: 2000.00}
+        balance: {type: number, example: -70.00}
+
+    CycleMemberSummary:
+      type: object
+      properties:
+        memberId: {type: string, format: uuid}
+        memberName: {type: string, example: "Rahim Khan"}
+        totalMeals: {type: number, example: 45.5}
+        mealCost: {type: number, example: 1820.00}
+        totalDeposited: {type: number, example: 2000.00}
+        balance: {type: number, example: 180.00}
+
+    NoticeObject:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        message: {type: string, example: "Mess will be closed on Eid day."}
+        postedBy: {type: string, format: uuid}
+        postedByName: {type: string, example: "Rahim Khan"}
+        createdAt: {type: string, format: date-time}
 
     MessResponse:
       type: object
@@ -577,6 +657,11 @@ paths:
                 receiptPhotoUrl:
                   type: string
                   example: "https://..."
+                category:
+                  type: string
+                  enum: [BAZAAR, UTILITY]
+                  default: "BAZAAR"
+                  description: "BAZAAR expenses feed the meal rate; UTILITY expenses are split equally among all members"
       responses:
         "201":
           description: Expense recorded
@@ -588,16 +673,7 @@ paths:
                   success:
                     type: boolean
                   data:
-                    type: object
-                    properties:
-                      id: {type: string, format: uuid}
-                      amount: {type: number}
-                      date: {type: string, format: date}
-                      note: {type: string, nullable: true}
-                      receiptPhotoUrl: {type: string, nullable: true}
-                      loggedBy: {type: string, format: uuid}
-                      loggedByName: {type: string}
-                      createdAt: {type: string, format: date-time}
+                    $ref: "#/components/schemas/ExpenseObject"
         "400":
           description: Validation error
           content:
@@ -628,16 +704,7 @@ paths:
                   data:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        id: {type: string, format: uuid}
-                        amount: {type: number}
-                        date: {type: string, format: date}
-                        note: {type: string, nullable: true}
-                        receiptPhotoUrl: {type: string, nullable: true}
-                        loggedBy: {type: string, format: uuid}
-                        loggedByName: {type: string}
-                        createdAt: {type: string, format: date-time}
+                      $ref: "#/components/schemas/ExpenseObject"
 
   /api/v1/expenses/{id}:
     delete:
@@ -790,3 +857,399 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      description: Exchange a valid refresh token for a new access token + refresh token (token rotation).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  example: "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."
+      responses:
+        "200":
+          description: New access token and rotated refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Refresh token invalid or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and revoke refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: {type: boolean, example: true}
+                  data: {type: string, example: "Logged out successfully"}
+
+  /api/v1/dues:
+    get:
+      tags: [Dues]
+      summary: Get dues summary for the current open cycle
+      description: Returns meal rate, total expenses (bazaar + utility), and per-member balances.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dues summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean, example: true}
+                  data:
+                    type: object
+                    properties:
+                      cycleId: {type: string, format: uuid}
+                      cycleStartDate: {type: string, format: date, example: "2026-07-01"}
+                      mealRate: {type: number, example: 40.00}
+                      totalExpenses: {type: number, example: 3000.00}
+                      totalUtilityExpense: {type: number, example: 500.00}
+                      totalMeals: {type: number, example: 62.5}
+                      balances:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/MemberBalanceResponse"
+        "403":
+          description: Must join a mess first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/cycle/close:
+    post:
+      tags: [Cycle]
+      summary: Close the current cycle (MANAGER only)
+      description: Runs DuesCalculator, persists per-member summaries, closes the cycle, and opens a new one starting the next day.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cycle closed; new cycle opened
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean, example: true}
+                  data:
+                    type: object
+                    properties:
+                      cycleId: {type: string, format: uuid}
+                      startDate: {type: string, format: date}
+                      endDate: {type: string, format: date}
+                      mealRate: {type: number}
+                      totalExpenses: {type: number}
+                      totalMeals: {type: number}
+                      closedAt: {type: string, format: date-time}
+                      balances:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CycleMemberSummary"
+                      newCycleId: {type: string, format: uuid}
+                      newCycleStartDate: {type: string, format: date}
+        "400":
+          description: No open cycle or cycle already closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "403":
+          description: Caller is not the manager
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/cycle/history:
+    get:
+      tags: [Cycle]
+      summary: Get closed cycle history
+      description: Returns all closed cycles with per-member summaries, newest first.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cycle history list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean, example: true}
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        cycleId: {type: string, format: uuid}
+                        startDate: {type: string, format: date}
+                        endDate: {type: string, format: date}
+                        mealRate: {type: number}
+                        closedAt: {type: string, format: date-time}
+                        balances:
+                          type: array
+                          items:
+                            $ref: "#/components/schemas/CycleMemberSummary"
+        "403":
+          description: Must join a mess first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/notices:
+    post:
+      tags: [Notices]
+      summary: Post a notice to the mess
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  example: "Mess will be closed on Eid day."
+      responses:
+        "201":
+          description: Notice posted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean, example: true}
+                  data:
+                    $ref: "#/components/schemas/NoticeObject"
+        "403":
+          description: Must join a mess first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+    get:
+      tags: [Notices]
+      summary: List all notices for the mess
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notice list ordered newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean, example: true}
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NoticeObject"
+        "403":
+          description: Must join a mess first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/notices/{id}:
+    delete:
+      tags: [Notices]
+      summary: Delete a notice
+      description: MANAGER can delete any notice; MEMBER can only delete their own.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Notice deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedResponse"
+        "403":
+          description: Not authorised to delete this notice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "404":
+          description: Notice not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/upload:
+    post:
+      tags: [Upload]
+      summary: Upload a receipt or generic image
+      description: |
+        Accepts multipart/form-data with a file field named `file`.
+        Stores under `public/receipts/`. Max 5 MB; accepted types: image/jpeg, image/png, image/webp.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: File uploaded; public URL returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean, example: true}
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        example: "https://messos-uploads.s3.ap-south-1.amazonaws.com/public/receipts/uuid.jpg"
+        "400":
+          description: Unsupported file type or file too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/auth/me/avatar:
+    put:
+      tags: [Auth]
+      summary: Upload profile avatar
+      description: |
+        Accepts multipart/form-data with a file field named `file`.
+        Stores under `public/avatars/` and updates `users.profile_image_url`. Max 5 MB.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Avatar uploaded; updated user profile returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Unsupported file type or file too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/ws:
+    get:
+      tags: [WebSocket]
+      summary: Connect to real-time event stream
+      description: |
+        Upgrades to a WebSocket connection for real-time push events scoped to the caller's mess.
+
+        **Authentication:** pass the JWT access token as `?token=<jwt>`. The token must include a `messId` claim (user must have joined a mess first). Ktor's `authenticate {}` block does not intercept WebSocket upgrades, so auth is handled manually server-side.
+
+        **Event types** pushed to all connected mess members after mutating operations:
+
+        | type | data keys |
+        |---|---|
+        | `MEAL_UPDATED` | `mealId` |
+        | `MEAL_DELETED` | `mealId` |
+        | `EXPENSE_ADDED` | `expenseId` |
+        | `EXPENSE_DELETED` | `expenseId` |
+        | `DEPOSIT_ADDED` | `depositId` |
+        | `DEPOSIT_DELETED` | `depositId` |
+        | `CYCLE_CLOSED` | `cycleId`, `newCycleId` |
+        | `NOTICE_POSTED` | `noticeId` |
+        | `NOTICE_DELETED` | `noticeId` |
+
+        Clients should re-fetch the relevant resource on receipt of an event rather than parsing the payload.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: JWT access token containing a valid `messId` claim
+      responses:
+        "101":
+          description: Switching Protocols — WebSocket connection established; server will push `WsEvent` frames
+        "401":
+          description: Token missing, invalid, or expired — connection closed with policy-violation code
