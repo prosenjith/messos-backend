@@ -31,6 +31,12 @@ fun Application.configureStatusPages() {
         exception<CycleAlreadyClosedException> { call, cause ->
             call.respond(HttpStatusCode.BadRequest, ApiFailure(error = ApiError("CYCLE_ALREADY_CLOSED", cause.message ?: "No open cycle found")))
         }
+        exception<CannotRemoveSelfException> { call, cause ->
+            call.respond(HttpStatusCode.Forbidden, ApiFailure(error = ApiError("CANNOT_REMOVE_SELF", cause.message ?: "Cannot remove yourself")))
+        }
+        exception<CannotChangeOwnRoleException> { call, cause ->
+            call.respond(HttpStatusCode.Forbidden, ApiFailure(error = ApiError("CANNOT_CHANGE_OWN_ROLE", cause.message ?: "Cannot change your own role")))
+        }
         exception<Throwable> { call, cause ->
             call.application.log.error("Unhandled exception", cause)
             call.respond(

@@ -2,6 +2,7 @@ package com.prosenjith.messos.plugins
 
 import com.prosenjith.messos.config.AppConfig
 import com.prosenjith.messos.routes.authRoutes
+import com.prosenjith.messos.routes.memberRoutes
 import com.prosenjith.messos.routes.cycleRoutes
 import com.prosenjith.messos.routes.depositRoutes
 import com.prosenjith.messos.routes.duesRoutes
@@ -18,6 +19,7 @@ import com.prosenjith.messos.services.DuesService
 import com.prosenjith.messos.services.ExpenseService
 import com.prosenjith.messos.services.MealService
 import com.prosenjith.messos.services.MessService
+import com.prosenjith.messos.services.MemberService
 import com.prosenjith.messos.services.NoticeService
 import com.prosenjith.messos.services.UploadService
 import com.prosenjith.messos.util.S3FileStorageService
@@ -34,6 +36,7 @@ fun Application.configureRouting(config: AppConfig) {
     val expenseService = ExpenseService()
     val depositService = DepositService()
     val duesService = DuesService()
+    val memberService = MemberService()
     val cycleService = CycleService()
     val noticeService = NoticeService()
     val bucket = config.storage.s3Bucket.ifBlank { error("AWS_S3_BUCKET env var not set") }
@@ -51,6 +54,7 @@ fun Application.configureRouting(config: AppConfig) {
         route("/api/v1") {
             authRoutes(authService, config.jwt)
             messRoutes(messService, config.jwt)
+            memberRoutes(memberService)
             mealRoutes(mealService)
             expenseRoutes(expenseService)
             depositRoutes(depositService)

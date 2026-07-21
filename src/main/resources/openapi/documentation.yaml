@@ -1238,6 +1238,146 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiFailure"
 
+  /api/v1/members/{memberId}:
+    delete:
+      tags: [Members]
+      summary: Remove a member from the mess
+      description: |
+        Removes the specified member from the caller's mess. Requires `role == MANAGER`.
+
+        - `memberId` is the `users.id` UUID (same value returned in `members[].id` from `GET /mess/{id}`)
+        - Cascade-deletes that member's meals and deposits automatically
+        - The caller cannot remove themselves
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The `users.id` UUID of the member to remove
+      responses:
+        "200":
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    required: [removed]
+                    properties:
+                      removed:
+                        type: boolean
+                        example: true
+        "403":
+          description: Not a manager, or caller tried to remove themselves
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "404":
+          description: Target member not found in this mess
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
+  /api/v1/members/{memberId}/role:
+    put:
+      tags: [Members]
+      summary: Change a member's role
+      description: |
+        Updates the role of the specified member. Requires `role == MANAGER`.
+
+        - `memberId` is the `users.id` UUID
+        - Valid roles: `MANAGER` or `MEMBER`
+        - MessOS allows multiple managers — the previous manager is NOT automatically demoted
+        - The caller cannot change their own role
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The `users.id` UUID of the member whose role to change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [MANAGER, MEMBER]
+                  example: MANAGER
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    required: [memberId, newRole]
+                    properties:
+                      memberId:
+                        type: string
+                        format: uuid
+                        example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                      newRole:
+                        type: string
+                        enum: [MANAGER, MEMBER]
+                        example: MANAGER
+        "400":
+          description: Invalid role value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "403":
+          description: Not a manager, or caller tried to change their own role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "404":
+          description: Target member not found in this mess
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+        "401":
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiFailure"
+
   /api/v1/ws:
     get:
       tags: [WebSocket]
@@ -1260,6 +1400,8 @@ paths:
         | `CYCLE_CLOSED` | `cycleId`, `newCycleId` |
         | `NOTICE_POSTED` | `noticeId` |
         | `NOTICE_DELETED` | `noticeId` |
+        | `MEMBER_REMOVED` | `memberId` |
+        | `MEMBER_ROLE_CHANGED` | `memberId` |
 
         Clients should re-fetch the relevant resource on receipt of an event rather than parsing the payload.
       parameters:
