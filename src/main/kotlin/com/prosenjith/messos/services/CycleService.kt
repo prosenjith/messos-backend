@@ -8,6 +8,7 @@ import com.prosenjith.messos.db.tables.MemberRole
 import com.prosenjith.messos.db.tables.MemberStatus
 import com.prosenjith.messos.db.tables.Meals
 import com.prosenjith.messos.db.tables.MessMembers
+import com.prosenjith.messos.db.tables.Messes
 import com.prosenjith.messos.db.tables.MonthlyCycles
 import com.prosenjith.messos.db.tables.Users
 import com.prosenjith.messos.util.CycleAlreadyClosedException
@@ -18,7 +19,8 @@ import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.MealEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.Clock
-import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
@@ -168,8 +170,16 @@ class CycleService {
                 it[MonthlyCycles.closedAt]           = closedAt
             }
 
-            // Open a new cycle starting tomorrow
-            val newStartDate = today.plus(1, DateTimeUnit.DAY)
+            // Open a new cycle starting on the next configured cycle-start day
+            val cycleStartDay = Messes.selectAll()
+                .where { Messes.id eq messId }
+                .single()[Messes.cycleStartDay]
+            val newStartDate = if (today.dayOfMonth <= cycleStartDay) {
+                LocalDate(today.year, today.month, cycleStartDay)
+            } else {
+                val firstOfNextMonth = LocalDate(today.year, today.month, 1).plus(DatePeriod(months = 1))
+                LocalDate(firstOfNextMonth.year, firstOfNextMonth.month, cycleStartDay)
+            }
             val newCycleRow = MonthlyCycles.insert {
                 it[MonthlyCycles.messId]    = messId
                 it[MonthlyCycles.startDate] = newStartDate

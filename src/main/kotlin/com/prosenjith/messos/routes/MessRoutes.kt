@@ -27,7 +27,7 @@ fun Route.messRoutes(messService: MessService, jwtConfig: JwtConfig) {
         post("/mess") {
             val userId = UUID.fromString(call.principal<JWTPrincipal>()!!.payload.subject)
             val req = call.receive<CreateMessRequest>()
-            val result = messService.createMess(userId, req.name, jwtConfig)
+            val result = messService.createMess(userId, req.name, req.cycleStartDay, jwtConfig)
             call.respond(
                 HttpStatusCode.Created,
                 ApiSuccess(data = MessWithTokenResponse(
@@ -78,6 +78,7 @@ fun Route.messRoutes(messService: MessService, jwtConfig: JwtConfig) {
                     name = detail.mess.name,
                     joinCode = detail.mess.joinCode,
                     managerId = detail.mess.managerId.toString(),
+                    cycleStartDay = detail.mess.cycleStartDay,
                     createdAt = detail.mess.createdAt,
                     members = detail.members.map { MemberInfo(it.id.toString(), it.name, it.role, it.status) }
                 ))
@@ -91,5 +92,6 @@ private fun com.prosenjith.messos.services.MessRecord.toResponse() = MessRespons
     name = name,
     joinCode = joinCode,
     managerId = managerId.toString(),
+    cycleStartDay = cycleStartDay,
     createdAt = createdAt
 )

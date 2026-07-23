@@ -27,6 +27,7 @@ data class MessRecord(
     val name: String,
     val joinCode: String,
     val managerId: UUID,
+    val cycleStartDay: Int,
     val createdAt: String
 )
 
@@ -36,8 +37,11 @@ data class MessDetail(val mess: MessRecord, val members: List<MemberRecord>)
 
 class MessService {
 
-    suspend fun createMess(userId: UUID, messName: String, jwtConfig: JwtConfig): MessWithToken {
+    suspend fun createMess(userId: UUID, messName: String, cycleStartDay: Int, jwtConfig: JwtConfig): MessWithToken {
         if (messName.isBlank()) throw ValidationException("Mess name cannot be blank")
+        val validCycleStartDays = setOf(1, 5, 10, 15, 25)
+        if (cycleStartDay !in validCycleStartDays)
+            throw ValidationException("cycleStartDay must be one of: 1, 5, 10, 15, 25")
         return newSuspendedTransaction(Dispatchers.IO) {
             if (MessMembers.selectAll()
                     .where { (MessMembers.userId eq userId) and (MessMembers.status eq MemberStatus.ACTIVE) }
@@ -50,6 +54,7 @@ class MessService {
                 it[Messes.name] = messName.trim()
                 it[Messes.joinCode] = joinCode
                 it[Messes.managerId] = userId
+                it[Messes.cycleStartDay] = cycleStartDay
             }
             val messId = messResult[Messes.id].value
 
@@ -66,7 +71,7 @@ class MessService {
 
             val token = JwtUtils.generateToken(jwtConfig, userId, messId, "MANAGER")
             MessWithToken(
-                mess = MessRecord(messId, messName.trim(), joinCode, userId, messResult[Messes.createdAt].toString()),
+                mess = MessRecord(messId, messName.trim(), joinCode, userId, cycleStartDay, messResult[Messes.createdAt].toString()),
                 token = token
             )
         }
@@ -99,6 +104,7 @@ class MessService {
                     name = messRow[Messes.name],
                     joinCode = messRow[Messes.joinCode],
                     managerId = messRow[Messes.managerId].value,
+                    cycleStartDay = messRow[Messes.cycleStartDay],
                     createdAt = messRow[Messes.createdAt].toString()
                 ),
                 token = token
@@ -133,6 +139,7 @@ class MessService {
                     name = messRow[Messes.name],
                     joinCode = messRow[Messes.joinCode],
                     managerId = messRow[Messes.managerId].value,
+                    cycleStartDay = messRow[Messes.cycleStartDay],
                     createdAt = messRow[Messes.createdAt].toString()
                 ),
                 members = members

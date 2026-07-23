@@ -3,7 +3,7 @@ package com.prosenjith.messos.models.mess
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class CreateMessRequest(val name: String)
+data class CreateMessRequest(val name: String, val cycleStartDay: Int = 1)
 
 @Serializable
 data class JoinMessRequest(val joinCode: String)
@@ -14,6 +14,7 @@ data class MessResponse(
     val name: String,
     val joinCode: String,
     val managerId: String,
+    val cycleStartDay: Int,
     val createdAt: String
 )
 
@@ -29,6 +30,7 @@ data class MessDetailResponse(
     val name: String,
     val joinCode: String,
     val managerId: String,
+    val cycleStartDay: Int,
     val createdAt: String,
     val members: List<MemberInfo>
 )

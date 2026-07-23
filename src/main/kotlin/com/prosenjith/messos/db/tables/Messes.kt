@@ -8,5 +8,6 @@ object Messes : UUIDTable("messes") {
     val name = varchar("name", 100)
     val joinCode = varchar("join_code", 8).uniqueIndex()
     val managerId = reference("manager_id", Users)
+    val cycleStartDay = integer("cycle_start_day").default(1)
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
 }
