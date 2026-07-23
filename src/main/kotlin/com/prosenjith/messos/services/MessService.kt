@@ -2,6 +2,7 @@ package com.prosenjith.messos.services
 
 import com.prosenjith.messos.config.JwtConfig
 import com.prosenjith.messos.db.tables.MemberRole
+import com.prosenjith.messos.db.tables.MemberStatus
 import com.prosenjith.messos.db.tables.MessMembers
 import com.prosenjith.messos.db.tables.Messes
 import com.prosenjith.messos.db.tables.MonthlyCycles
@@ -10,6 +11,7 @@ import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.InvalidJoinCodeException
 import com.prosenjith.messos.util.JwtUtils
 import com.prosenjith.messos.util.ValidationException
+import org.jetbrains.exposed.sql.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -28,7 +30,7 @@ data class MessRecord(
     val createdAt: String
 )
 
-data class MemberRecord(val id: UUID, val name: String, val role: String)
+data class MemberRecord(val id: UUID, val name: String, val role: String, val status: String)
 data class MessWithToken(val mess: MessRecord, val token: String)
 data class MessDetail(val mess: MessRecord, val members: List<MemberRecord>)
 
@@ -37,7 +39,10 @@ class MessService {
     suspend fun createMess(userId: UUID, messName: String, jwtConfig: JwtConfig): MessWithToken {
         if (messName.isBlank()) throw ValidationException("Mess name cannot be blank")
         return newSuspendedTransaction(Dispatchers.IO) {
-            if (MessMembers.selectAll().where { MessMembers.userId eq userId }.any()) {
+            if (MessMembers.selectAll()
+                    .where { (MessMembers.userId eq userId) and (MessMembers.status eq MemberStatus.ACTIVE) }
+                    .any()
+            ) {
                 throw ValidationException("You are already a member of a mess")
             }
             val joinCode = generateJoinCode()
@@ -73,7 +78,10 @@ class MessService {
                 .where { Messes.joinCode eq joinCode.uppercase() }
                 .singleOrNull() ?: throw InvalidJoinCodeException("Invalid join code")
 
-            if (MessMembers.selectAll().where { MessMembers.userId eq userId }.any()) {
+            if (MessMembers.selectAll()
+                    .where { (MessMembers.userId eq userId) and (MessMembers.status eq MemberStatus.ACTIVE) }
+                    .any()
+            ) {
                 throw ValidationException("You are already a member of a mess")
             }
 
@@ -114,7 +122,8 @@ class MessService {
                     MemberRecord(
                         id = row[Users.id].value,
                         name = row[Users.name],
-                        role = row[MessMembers.role].name
+                        role = row[MessMembers.role].name,
+                        status = row[MessMembers.status].name
                     )
                 }
 
@@ -128,6 +137,27 @@ class MessService {
                 ),
                 members = members
             )
+        }
+
+    suspend fun leaveMess(userId: UUID, messId: UUID): UUID =
+        newSuspendedTransaction(Dispatchers.IO) {
+            val memberRow = MessMembers.selectAll()
+                .where { (MessMembers.messId eq messId) and (MessMembers.userId eq userId) }
+                .singleOrNull() ?: throw ForbiddenException("You are not a member of this mess")
+
+            if (memberRow[MessMembers.role] == MemberRole.MANAGER) {
+                throw ForbiddenException("Managers cannot leave the mess. Transfer your manager role to another member first.")
+            }
+            if (memberRow[MessMembers.status] == MemberStatus.LEFT) {
+                throw ValidationException("You have already left this mess")
+            }
+
+            MessMembers.update({ (MessMembers.messId eq messId) and (MessMembers.userId eq userId) }) {
+                it[MessMembers.status] = MemberStatus.LEFT
+                it[MessMembers.leftAt] = Clock.System.now()
+            }
+
+            memberRow[MessMembers.id].value
         }
 
     private fun generateJoinCode(): String {

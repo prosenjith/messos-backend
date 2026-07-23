@@ -18,7 +18,10 @@ data class MessResponse(
 )
 
 @Serializable
-data class MemberInfo(val id: String, val name: String, val role: String)
+data class MemberInfo(val id: String, val name: String, val role: String, val status: String)
+
+@Serializable
+data class LeaveMessResponse(val left: Boolean)
 
 @Serializable
 data class MessDetailResponse(

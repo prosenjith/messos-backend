@@ -3,10 +3,13 @@ package com.prosenjith.messos.services
 import com.prosenjith.messos.db.tables.CycleStatus
 import com.prosenjith.messos.db.tables.Deposits
 import com.prosenjith.messos.db.tables.Expenses
+import com.prosenjith.messos.db.tables.MemberStatus
 import com.prosenjith.messos.db.tables.Meals
 import com.prosenjith.messos.db.tables.MessMembers
 import com.prosenjith.messos.db.tables.MonthlyCycles
 import com.prosenjith.messos.db.tables.Users
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import com.prosenjith.messos.util.DepositEntry
 import com.prosenjith.messos.util.DuesCalculator
 import com.prosenjith.messos.util.ExpenseEntry
@@ -48,13 +51,23 @@ class DuesService {
             val cycleId = cycle[MonthlyCycles.id].value
             val cycleStartDate = cycle[MonthlyCycles.startDate]
 
-            // messMemberId → (userId, name)
-            val memberMap = (MessMembers innerJoin Users)
+            val memberRows = (MessMembers innerJoin Users)
                 .selectAll()
                 .where { MessMembers.messId eq messId }
-                .associate { it[MessMembers.id].value to (it[Users.id].value to it[Users.name]) }
+                .toList()
 
-            val nameByUserId = memberMap.values.associate { it.first to it.second }
+            // messMemberId → (userId, name) — ALL members so past meals/deposits are captured
+            val memberMap = memberRows.associate { it[MessMembers.id].value to (it[Users.id].value to it[Users.name]) }
+            val nameByUserId = memberRows.associate { it[Users.id].value to it[Users.name] }
+
+            // Only charge utility share to members active during this cycle
+            val cycleStartInstant = cycleStartDate.atStartOfDayIn(TimeZone.UTC)
+            val allMemberUserIds = memberRows
+                .filter {
+                    it[MessMembers.status] == MemberStatus.ACTIVE ||
+                    (it[MessMembers.leftAt] != null && it[MessMembers.leftAt]!! >= cycleStartInstant)
+                }
+                .map { it[Users.id].value }
 
             val meals = Meals.selectAll()
                 .where { (Meals.messId eq messId) and (Meals.date greaterEq cycleStartDate) }
@@ -82,7 +95,6 @@ class DuesService {
                     DepositEntry(memberUserId = userId, amount = row[Deposits.amount].toDouble())
                 }
 
-            val allMemberUserIds = memberMap.values.map { it.first }
             val result = DuesCalculator.calculate(meals, expenses, deposits, allMemberUserIds)
 
             DuesRecord(

@@ -4,12 +4,16 @@ import com.prosenjith.messos.config.JwtConfig
 import com.prosenjith.messos.models.ApiSuccess
 import com.prosenjith.messos.models.mess.CreateMessRequest
 import com.prosenjith.messos.models.mess.JoinMessRequest
+import com.prosenjith.messos.models.mess.LeaveMessResponse
 import com.prosenjith.messos.models.mess.MemberInfo
 import com.prosenjith.messos.models.mess.MessDetailResponse
 import com.prosenjith.messos.models.mess.MessResponse
 import com.prosenjith.messos.models.mess.MessWithTokenResponse
+import com.prosenjith.messos.models.ws.WsEvent
 import com.prosenjith.messos.services.MessService
+import com.prosenjith.messos.util.ForbiddenException
 import com.prosenjith.messos.util.ValidationException
+import com.prosenjith.messos.util.WebSocketManager
 import io.ktor.http.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
@@ -46,6 +50,20 @@ fun Route.messRoutes(messService: MessService, jwtConfig: JwtConfig) {
             )
         }
 
+        post("/mess/leave") {
+            val principal = call.principal<JWTPrincipal>()!!
+            val userId = UUID.fromString(principal.payload.subject)
+            val messId = principal.payload.getClaim("messId").asString()
+                ?.let { UUID.fromString(it) }
+                ?: throw ForbiddenException("You must join a mess first")
+
+            val memberId = messService.leaveMess(userId, messId)
+            call.respond(HttpStatusCode.OK, ApiSuccess(data = LeaveMessResponse(left = true)))
+            WebSocketManager.broadcastToMess(messId, WsEvent("MEMBER_LEFT", mapOf(
+                "memberId" to memberId.toString()
+            )))
+        }
+
         get("/mess/{id}") {
             val userId = UUID.fromString(call.principal<JWTPrincipal>()!!.payload.subject)
             val messId = try {
@@ -61,7 +79,7 @@ fun Route.messRoutes(messService: MessService, jwtConfig: JwtConfig) {
                     joinCode = detail.mess.joinCode,
                     managerId = detail.mess.managerId.toString(),
                     createdAt = detail.mess.createdAt,
-                    members = detail.members.map { MemberInfo(it.id.toString(), it.name, it.role) }
+                    members = detail.members.map { MemberInfo(it.id.toString(), it.name, it.role, it.status) }
                 ))
             )
         }

@@ -1,6 +1,7 @@
 package com.prosenjith.messos.services
 
 import com.prosenjith.messos.db.tables.MemberRole
+import com.prosenjith.messos.db.tables.MemberStatus
 import com.prosenjith.messos.db.tables.Meals
 import com.prosenjith.messos.db.tables.MessMembers
 import com.prosenjith.messos.db.tables.Users
@@ -55,11 +56,18 @@ class MealService {
                 .where { (MessMembers.messId eq messId) and (MessMembers.userId eq callerUserId) }
                 .singleOrNull() ?: throw ForbiddenException("You are not a member of this mess")
 
+            if (callerMember[MessMembers.status] == MemberStatus.LEFT)
+                throw ForbiddenException("You have left this mess and cannot make changes")
+
             if (callerMember[MessMembers.role] == MemberRole.MEMBER && callerUserId != targetUserId) {
                 throw ForbiddenException("Members can only log their own meals")
             }
 
             val (messMemberId, targetName) = requireMemberInMess(messId, targetUserId)
+
+            val targetRow = MessMembers.selectAll().where { MessMembers.id eq messMemberId }.single()
+            if (targetRow[MessMembers.status] == MemberStatus.LEFT)
+                throw ValidationException("Cannot log meals for a member who has left the mess")
             val cycleStartDate = requireOpenCycle(messId).startDate
             val today = Clock.System.todayIn(TimeZone.UTC)
 
@@ -136,6 +144,9 @@ class MealService {
             val callerMember = MessMembers.selectAll()
                 .where { (MessMembers.messId eq messId) and (MessMembers.userId eq callerUserId) }
                 .singleOrNull() ?: throw ForbiddenException("You are not a member of this mess")
+
+            if (callerMember[MessMembers.status] == MemberStatus.LEFT)
+                throw ForbiddenException("You have left this mess and cannot make changes")
 
             if (callerMember[MessMembers.role] != MemberRole.MANAGER &&
                 meal[Meals.memberId].value != callerMember[MessMembers.id].value

@@ -5,6 +5,7 @@ import com.prosenjith.messos.db.tables.CycleSummaries
 import com.prosenjith.messos.db.tables.Deposits
 import com.prosenjith.messos.db.tables.Expenses
 import com.prosenjith.messos.db.tables.MemberRole
+import com.prosenjith.messos.db.tables.MemberStatus
 import com.prosenjith.messos.db.tables.Meals
 import com.prosenjith.messos.db.tables.MessMembers
 import com.prosenjith.messos.db.tables.MonthlyCycles
@@ -19,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 import org.jetbrains.exposed.sql.SortOrder
@@ -127,7 +129,14 @@ class CycleService {
                     DepositEntry(memberUserId = userId, amount = row[Deposits.amount].toDouble())
                 }
 
-            val allMemberUserIds = memberDataByUserId.keys.toList()
+            // Include ACTIVE members + LEFT members who left during this cycle (leftAt >= cycleStart)
+            val cycleStartInstant = cycleStartDate.atStartOfDayIn(TimeZone.UTC)
+            val allMemberUserIds = memberRows
+                .filter {
+                    it[MessMembers.status] == MemberStatus.ACTIVE ||
+                    (it[MessMembers.leftAt] != null && it[MessMembers.leftAt]!! >= cycleStartInstant)
+                }
+                .map { it[Users.id].value }
             val result = DuesCalculator.calculate(meals, expenses, deposits, allMemberUserIds)
 
             val today = Clock.System.todayIn(TimeZone.UTC)

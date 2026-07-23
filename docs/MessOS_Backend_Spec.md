@@ -43,18 +43,29 @@ object Messes : UUIDTable("messes") {
 ### 1.3 MessMembers
 ```kotlin
 enum class MemberRole { MANAGER, MEMBER }
+enum class MemberStatus { ACTIVE, LEFT }
 
 object MessMembers : UUIDTable("mess_members") {
     val messId = reference("mess_id", Messes, onDelete = ReferenceOption.CASCADE)
     val userId = reference("user_id", Users, onDelete = ReferenceOption.CASCADE)
     val role = enumerationByName("role", 10, MemberRole::class)
+    val status = enumerationByName<MemberStatus>("status", 10).default(MemberStatus.ACTIVE)
     val joinedAt = timestamp("joined_at").clientDefault { Clock.System.now() }
+    val leftAt = timestamp("left_at").nullable()
 
     init {
         uniqueIndex(messId, userId) // one membership per user per mess
     }
 }
 ```
+
+Rows are **never deleted** — `MessMembers` is soft-deleted via `status = LEFT` to
+preserve FK integrity for `Meals` and `Deposits`. A member who leaves mid-cycle
+continues to appear in the current cycle's dues and close-out; their balance is
+settled normally at cycle close. They cannot log new meals or participate in
+subsequent cycles.
+
+V14 migration: `ALTER TABLE mess_members ADD COLUMN status VARCHAR(10) NOT NULL DEFAULT 'ACTIVE', ADD COLUMN left_at TIMESTAMPTZ NULL;`
 
 ### 1.4 Meals
 ```kotlin
@@ -217,15 +228,30 @@ All responses are wrapped in a standard envelope (see Section 3). Below are the
   "managerId": "uuid",
   "createdAt": "iso-8601",
   "members": [
-    { "id": "uuid", "name": "string", "role": "MANAGER|MEMBER" }
+    { "id": "uuid", "name": "string", "role": "MANAGER|MEMBER", "status": "ACTIVE|LEFT" }
   ]
 }
 ```
 
 Notes:
 - `members[].id` is the user's UUID (from the `users` table), not the `mess_members` row UUID.
+- `members` includes ALL members — both `ACTIVE` and `LEFT` — so history is preserved.
 - `joinCode` is always returned regardless of the caller's role.
 - `currentCycle` is not included; fetch it via `GET /dues` or `GET /cycle/history`.
+
+**POST /mess/leave** *(requires JWT with messId claim)*
+
+Marks the caller as LEFT (soft-delete). The caller's existing meals/deposits remain
+and contribute to the current cycle's dues. MANAGER cannot call this endpoint.
+
+```json
+// Response
+{ "left": true }
+```
+
+Error cases:
+- `403 FORBIDDEN` — caller is a MANAGER ("Managers cannot leave the mess. Transfer your manager role to another member first.")
+- `400 VALIDATION_ERROR` — caller has already left this mess
 
 ### 2.3 Meals
 
@@ -393,15 +419,22 @@ always returned as uppercase. A `VALIDATION_ERROR` is returned for any other val
 }
 ```
 
-**Dues calculation formula (as of V12):**
+**Dues calculation formula (as of V12/V14):**
 - `mealRate` = `totalBazaarExpense / totalMeals` (utility expenses excluded from meal rate)
 - `utilityShare` per member = `totalUtilityExpense / activeMemberCount` (split equally)
-- `activeMemberCount` = all current mess members (including members with no meals/deposits)
+- `activeMemberCount` = members who were ACTIVE during this cycle (see note below)
 - `balance` = `totalDeposited − mealCost − utilityShare`
 - `totalExpenses` = `totalBazaarExpense + totalUtilityExpense` (full cycle spend)
 
 Members who joined mid-cycle with no meals or deposits still appear in balances with
 `mealCost = 0` and a negative balance equal to their `utilityShare`.
+
+**LEFT member handling (as of V14):** `allMemberUserIds` (used for utility-share
+calculation) is filtered to: `status = ACTIVE` OR `leftAt >= cycleStartDate`. This
+means a member who left during the current cycle is still charged utility share (they
+were part of the mess when expenses were incurred), but a member who left in a prior
+cycle is excluded from new cycles' utility share. GET /dues returns LEFT members'
+balances as long as they have activity in the current OPEN cycle.
 
 **POST /cycle/close** *(requires JWT with messId claim; caller must be MANAGER)*
 ```json
@@ -556,6 +589,9 @@ relevant REST endpoint on receipt rather than using the WebSocket payload direct
 | `NOTICE_POSTED` | New notice posted | `noticeId` |
 | `NOTICE_DELETED` | A notice is deleted | `noticeId` |
 | `CYCLE_CLOSED` | Manager closes the month | `cycleId`, `newCycleId` |
+| `MEMBER_REMOVED` | Manager removes a member | `memberId` (user UUID) |
+| `MEMBER_ROLE_CHANGED` | Manager changes a member's role | `memberId` (user UUID) |
+| `MEMBER_LEFT` | A member voluntarily leaves | `memberId` (mess_members row UUID) |
 
 Client behavior: on any event, refresh the relevant list or screen if currently
 visible. There is no `DUES_RECALCULATED` push event; the client should re-fetch
