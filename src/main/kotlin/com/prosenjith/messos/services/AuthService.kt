@@ -1,6 +1,7 @@
 package com.prosenjith.messos.services
 
 import com.prosenjith.messos.config.JwtConfig
+import com.prosenjith.messos.db.tables.MemberStatus
 import com.prosenjith.messos.db.tables.MessMembers
 import com.prosenjith.messos.db.tables.RefreshTokens
 import com.prosenjith.messos.db.tables.Users
@@ -10,6 +11,7 @@ import com.prosenjith.messos.util.UnauthorizedException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.Clock
 import kotlinx.datetime.toJavaInstant
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
@@ -53,7 +55,7 @@ class AuthService {
             }
             val userId = row[Users.id].value
             val memberRow = MessMembers.selectAll()
-                .where { MessMembers.userId eq userId }
+                .where { (MessMembers.userId eq userId) and (MessMembers.status eq MemberStatus.ACTIVE) }
                 .singleOrNull()
             LoginResult(
                 userId = userId,
@@ -116,7 +118,7 @@ class AuthService {
             }
 
             val memberRow = MessMembers.selectAll()
-                .where { MessMembers.userId eq userId }
+                .where { (MessMembers.userId eq userId) and (MessMembers.status eq MemberStatus.ACTIVE) }
                 .singleOrNull()
 
             newToken to LoginResult(
