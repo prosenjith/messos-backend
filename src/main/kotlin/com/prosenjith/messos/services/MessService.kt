@@ -91,10 +91,21 @@ class MessService {
             }
 
             val messId = messRow[Messes.id].value
-            MessMembers.insert {
-                it[MessMembers.messId] = messId
-                it[MessMembers.userId] = userId
-                it[MessMembers.role] = MemberRole.MEMBER
+            val existingRow = MessMembers.selectAll()
+                .where { (MessMembers.messId eq messId) and (MessMembers.userId eq userId) }
+                .singleOrNull()
+
+            if (existingRow != null) {
+                MessMembers.update({ (MessMembers.messId eq messId) and (MessMembers.userId eq userId) }) {
+                    it[MessMembers.status] = MemberStatus.ACTIVE
+                    it[MessMembers.role] = MemberRole.MEMBER
+                }
+            } else {
+                MessMembers.insert {
+                    it[MessMembers.messId] = messId
+                    it[MessMembers.userId] = userId
+                    it[MessMembers.role] = MemberRole.MEMBER
+                }
             }
 
             val token = JwtUtils.generateToken(jwtConfig, userId, messId, "MEMBER")
